@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CdDrive.hpp"
+
 #include <string>
 #include <string_view>
 
@@ -37,6 +38,7 @@ private:
     // Console Helper
     std::string readConsoleInput();
 
+private:
     SystemMode _systemMode = SystemMode::Command;
     CdDrive _drive;
 

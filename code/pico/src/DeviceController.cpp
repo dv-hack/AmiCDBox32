@@ -8,9 +8,10 @@
 #include <iostream>
 #include <algorithm>
 
-constexpr uint strobePin = 14;
-constexpr uint ejectPin = 15;
+constexpr uint32_t strobePin = 14;
+constexpr uint32_t ejectPin = 15;
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::init()
 {
     gpio_init(strobePin);
@@ -26,6 +27,7 @@ void DeviceController::init()
     std::cout << "================================================\n";
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::update()
 {
     // 1. Handle Serial Console in Command Mode
@@ -60,6 +62,7 @@ void DeviceController::update()
     sleep_ms(10);
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::processCommand(std::string_view commandLine)
 {
     if (commandLine == "LIST")
@@ -88,6 +91,7 @@ void DeviceController::processCommand(std::string_view commandLine)
     }
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdList()
 {
     std::cout << "[System] Available virtual images (MOCKED):\n";
@@ -95,6 +99,7 @@ void DeviceController::cmdList()
     std::cout << "  - super_game_cd.cue (Multi-track data/audio)\n";
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdMount(std::string_view filename)
 {
     if (_drive.mount(filename))
@@ -105,6 +110,7 @@ void DeviceController::cmdMount(std::string_view filename)
     }
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdEject()
 {
     _drive.eject();
@@ -112,6 +118,7 @@ void DeviceController::cmdEject()
     std::cout << "[System] Switching back to COMMAND MODE.\n";
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdPlay(std::string_view args)
 {
     if (_drive.getState() == DriveState::NoMedia)
@@ -144,11 +151,13 @@ void DeviceController::cmdPlay(std::string_view args)
     }
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdStop()
 {
     _drive.stop();
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::handleStrobeTrigger()
 {
     if (_systemMode == SystemMode::Storage)
@@ -161,12 +170,14 @@ void DeviceController::handleStrobeTrigger()
     }
 }
 
+// ------------------------------------------------------------------------------------------------
 void DeviceController::handleEjectTrigger()
 {
     std::cout << "[System] Physical Eject Button Pressed.\n";
     cmdEject();
 }
 
+// ------------------------------------------------------------------------------------------------
 std::string DeviceController::readConsoleInput()
 {
     static std::string buffer = "";
