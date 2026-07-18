@@ -23,7 +23,7 @@ void DeviceController::init()
     gpio_pull_up(ejectPin);
 
     std::cout << "\n=== AmiCDBox32 System Controller Initialized ===\n";
-    std::cout << "Ready in COMMAND mode. Type LIST, MOUNT, PLAY, STOP or EJECT.\n";
+    std::cout << "Ready in COMMAND mode. Type VERSION, LIST, MOUNT, PLAY, STOP or EJECT.\n";
     std::cout << "================================================\n";
 }
 
@@ -85,6 +85,10 @@ void DeviceController::processCommand(std::string_view commandLine)
     {
         cmdStop();
     }
+    else if (commandLine == "VERSION")
+    {
+        cmdVersion();
+    }
     else
     {
         std::cout << "[System] Unknown command: " << commandLine << "\n";
@@ -92,16 +96,26 @@ void DeviceController::processCommand(std::string_view commandLine)
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdList()
+void DeviceController::cmdVersion()
 {
-    std::cout << "[System] Available virtual images (MOCKED):\n";
-    std::cout << "  - game_classic.iso (Data only)\n";
-    std::cout << "  - super_game_cd.cue (Multi-track data/audio)\n";
+    std::cout << "\n--- AmiCDBox32 System Information ---\n";
+    std::cout << "Firmware Version: " << FirmwareVersion << '\n';
+    std::cout << "Build Date      : " << __DATE__ << " " << __TIME__ << "\n";
+    std::cout << "Toolchain       : GCC " << __VERSION__ << " (C++20 Target)\n";
+    std::cout << "Target Hardware : Raspberry Pi Pico\n";
+    std::cout << "-------------------------------------\n\n";
 }
+
 
 // ------------------------------------------------------------------------------------------------
 void DeviceController::cmdMount(std::string_view filename)
 {
+    if( !initializeFileSystem() )
+    {
+        std::cout << "[System] Mount failed: storage not ready.\n";
+        return;
+    }
+
     if (_drive.mount(filename))
     {
         _systemMode = SystemMode::Storage;
@@ -111,9 +125,38 @@ void DeviceController::cmdMount(std::string_view filename)
 }
 
 // ------------------------------------------------------------------------------------------------
+void DeviceController::cmdList()
+{
+    std::cout << "[System] Scanning MicroSD root directory...\n";
+    
+    auto files = fileList();
+    if (files.empty()) 
+    {
+        std::cout << "[System] No files found or SD card unreadable.\n";
+        return;
+    }
+
+    std::cout << "--- Files found on MicroSD ---\n";
+    for (const auto& file : files) {
+        std::cout << "  -> " << file << "\n";
+    }
+    std::cout << "------------------------------\n";
+}
+
+// ------------------------------------------------------------------------------------------------
 void DeviceController::cmdEject()
 {
+    if (_drive.getState() == DriveState::NoMedia) {
+        std::cout << "[System] No media is currently mounted.\n";
+        return;
+    }
+
     _drive.eject();
+
+    // unmount fatfs
+    f_mount(nullptr, "0:", 0);
+    _sdInitialized = false;
+    
     _systemMode = SystemMode::Command;
     std::cout << "[System] Switching back to COMMAND MODE.\n";
 }
@@ -197,4 +240,54 @@ std::string DeviceController::readConsoleInput()
         character = getchar_timeout_us(0);
     }
     return "";
+}
+
+// ------------------------------------------------------------------------------------------------
+bool DeviceController::initializeFileSystem()
+{
+    if( _sdInitialized )
+        return true;
+
+    // FfatFs mount: volume 0, 1 = force mount immediately to verify hardware
+    FRESULT result = f_mount(&_fileSystem, "0:", 1);
+    if (result != FR_OK) 
+    {
+        std::cout << "[Storage] Failed to mount FAT32 File System. Error code: " << static_cast<int>(result) << "\n";
+        return false;
+    }
+
+    std::cout << "[Storage] FAT32 File System successfully mounted.\n";
+    _sdInitialized = true;
+    return true;        
+}
+
+// ------------------------------------------------------------------------------------------------
+std::vector<std::string> DeviceController::fileList()
+{
+    if (!initializeFileSystem())
+        return {};
+    
+    DIR directory;
+    FILINFO fileInfo;
+    
+    // Open the root directory of the MicroSD card
+    FRESULT result = f_opendir(&directory, "0:/");
+    if (result != FR_OK) 
+    {
+        std::cout << "[Storage] Cannot open root directory. Error: " << static_cast<int>(result) << "\n";
+        return {};
+    }
+
+    std::vector<std::string> files;
+
+    // Iterate through all files in the root directory
+    while (f_readdir(&directory, &fileInfo) == FR_OK && fileInfo.fname[0] != 0)
+     {
+        // Skip directories, we only look for image files and cues
+        if (!(fileInfo.fattrib & AM_DIR))
+            files.emplace_back(fileInfo.fname);
+    }
+
+    f_closedir(&directory);
+    return files;
 }

@@ -1,5 +1,6 @@
 // AudioPlayer.hpp
 //
+#include <cstdint>
 
 class AudioPlayer
 {
