@@ -28,14 +28,22 @@ add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/FatFS_SPI)
 
 add_executable(AmiCDBox32
     src/main.cpp
-    src/CueParser.cpp
-    src/CueParser.hpp
     src/AudioPlayer.cpp
     src/AudioPlayer.hpp
+    src/BinFile.cpp
+    src/BinFile.hpp
     src/CdDrive.cpp
     src/CdDrive.hpp
+    src/CdMap.cpp
+    src/CdMap.hpp
+    src/CueParser.cpp
+    src/CueParser.hpp
     src/DeviceController.cpp
     src/DeviceController.hpp
+    src/IAudioPlayer.hpp
+    src/PwmBuzzerPlayer.cpp
+    src/PwmBuzzerPlayer.hpp
+    src/Sector.hpp
 )
 
 # Set C++20 standard requirements
@@ -45,6 +53,7 @@ target_compile_features(AmiCDBox32 PRIVATE cxx_std_20)
 target_link_libraries(AmiCDBox32 
 pico_stdlib
 hardware_spi
+hardware_pwm
 FatFs_SPI
 )
 

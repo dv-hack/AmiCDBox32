@@ -16,7 +16,7 @@ enum class SystemMode
     Storage
 };
 
-static constexpr char FirmwareVersion[] = "0.3.0-alpha (FatFs Native Integration)";
+static constexpr char FirmwareVersion[] = "0.4.0-alpha";
 
 class DeviceController
 {
@@ -27,7 +27,9 @@ public:
     void update();
 
 private:
-    void processCommand(std::string_view commandLine);
+    void processConfigCommand(std::string_view commandLine);
+    void processHostCommand(std::string_view commandLine);
+    
     bool initializeFileSystem();
     std::vector<std::string> fileList();
 

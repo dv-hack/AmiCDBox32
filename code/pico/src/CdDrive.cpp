@@ -1,36 +1,42 @@
+// CdDrive.cpp
+//
 #include "CdDrive.hpp"
+
+#include "Sector.hpp"
+
 #include "pico/stdlib.h"
-#include "hardware/spi.h"
+
 #include <iostream>
 #include <algorithm>
 
-// Assign the hardware SPI instance to a runtime constant to bypass the SDK's C-style macro restriction
-spi_inst_t* const spiHardwareInstance = spi0;
+// ------------------------------------------------------------------------------------------------
+bool CdDrive::mount(std::string_view filename) 
+{
+    _map = buildCdMap( filename );
 
-constexpr uint mosiPin = 19;
-constexpr uint misoPin = 16;
-constexpr uint sckPin = 18;
-constexpr uint csPin = 17;
-
-bool CdDrive::mount(std::string_view filename) {
-   _mountedFile = std::string(filename);
+    if( !_map.isValid() )
+    {
+        std::cout << "[CdDrive] Unable to extract TOC for " << filename << "\n";
+        return false;
+    }     
+    
+    _mountedFile = std::string(filename);    
     _currentLba = 0;
+    _isMultiTrack = (_map.tracks.size() > 1);
+    _totalSectors = _map.tracks.empty() ? 0 : _map.tracks.back().endSector + 1;
 
-    if (filename.ends_with(".cue")) {
-        _isMultiTrack = true;
-        _totalSectors = 30000;
-        std::cout << "[CdDrive] Loaded CUE sheet template. Multitrack CD-DA ready.\n";
-    } else {
-        _isMultiTrack = false;
-        _totalSectors = 10000;
-        std::cout << "[CdDrive] Loaded flat ISO template. Data-only mode ready.\n";
-    }
+    std::cout << "[CdDrive] Media mounted. Total layout sectors: " << _totalSectors 
+              << " (MultiTrack: " << (_isMultiTrack ? "Yes" : "No") << ")\n";
 
     _state = DriveState::Idle;
     return true;
 }
 
-void CdDrive::eject() {
+// ------------------------------------------------------------------------------------------------
+void CdDrive::eject() 
+{
+    stop();
+
     _mountedFile = "";
     _currentLba = 0;
     _totalSectors = 0;
@@ -39,52 +45,170 @@ void CdDrive::eject() {
     std::cout << "[CdDrive] Media logically ejected.\n";
 }
 
-void CdDrive::play(size_t targetLba) {
-    if (_state == DriveState::NoMedia) return;
+// ------------------------------------------------------------------------------------------------
+void CdDrive::play(size_t targetLba) 
+{
+    if (_state == DriveState::NoMedia)
+        return;
     
     _currentLba = targetLba;
-    _state = DriveState::PlayingAudio;
+
+    if( _binFile.isOpen() )
+    {
+        std::cout << "[CdDrive] Audio already playing.\n";
+        return;
+    }
+
+    const auto track = _map.getTrackAtSector(targetLba);
+    if( track && track->type == TrackType::Audio )
+    {
+        const auto filename = _map.rootFolder + track->binFilename;
+   
+        if( _binFile.open( filename ) != BinFile::ErrorCode::NoError )
+        {
+            std::cout << "[CdDrive] Could not play audio from file "<< filename <<"\n";
+            return;
+        }    
+        
+        _state = DriveState::PlayingAudio;
+        if( _audioPlayer )
+            _audioPlayer->startPlayback();
+    }    
+
     std::cout << "[CdDrive] Starting audio playback at LBA " << _currentLba << "\n";
 }
 
-void CdDrive::playTrack(int trackNumber) {
-    if (_state == DriveState::NoMedia) return;
+// ------------------------------------------------------------------------------------------------
+void CdDrive::playTrack(int trackNumber) 
+{
+    if (_state == DriveState::NoMedia)
+        return;
 
-    std::cout << "[CdDrive] Searching map for track " << trackNumber << " (Mocked to LBA 10000)...\n";
-    play(10000);
+    // find corresponding track
+    auto found = std::find_if( _map.tracks.begin(), _map.tracks.end(), [n=trackNumber](const auto &t) 
+    {
+        return t.number == n;
+    });
+
+    // not found?
+    if( found == std::end(_map.tracks) )
+    {
+        std::cout << "[CdDrive] Error: Track " << trackNumber << " not found in TOC.\n";
+        return;
+    }
+
+    // not an audio track?
+    if (found->type != TrackType::Audio) 
+    {
+        std::cout << "[CdDrive] Track " << trackNumber << " is a Data track (LBA " << found->startSector << "). Cannot play as audio.\n";
+        return;
+    }
+
+    std::cout << "[CdDrive] Track " << trackNumber << " found. Starting audio at LBA " << found->startSector << ".\n";
+    
+    if(_state == DriveState::PlayingAudio)
+        stop();
+    
+    play(found->startSector);
 }
 
-void CdDrive::stop() {
-    if (_state == DriveState::PlayingAudio) {
+// ------------------------------------------------------------------------------------------------
+void CdDrive::stop() 
+{
+    if (_state == DriveState::PlayingAudio) 
+    {
         _state = DriveState::Idle;
-        std::cout << "[CdDrive] Audio playback stopped.\n";
+        if (_audioPlayer)
+            _audioPlayer->stopPlayback();
+        
+        _binFile.close();
+        std::cout << "[CdDrive] Audio playback stopped. File closed.\n";
     }
 }
 
-void CdDrive::advanceSector() {
-    if (_state == DriveState::NoMedia) return;
+// ------------------------------------------------------------------------------------------------
+void CdDrive::tickAudio() 
+{
+    if (_state != DriveState::PlayingAudio) 
+        return;
 
-    if (_currentLba >= _totalSectors) {
+    if (_currentLba >= _totalSectors) 
+    {
+        std::cout << "\n[CdDrive] End of audio tracks reached.\n";
+        stop();
+        return;
+    }
+
+    // Invia i 2352 byte correnti al lettore/buzzer
+    streamAudioSector(_currentLba);
+
+    // Incrementa l'LBA per il prossimo tick temporizzato
+    _currentLba++;
+}
+
+// ------------------------------------------------------------------------------------------------
+void CdDrive::advanceSector() 
+{
+    if (_state == DriveState::NoMedia) 
+        return;
+
+    if (_currentLba >= _totalSectors)
+    {
         std::cout << "[CdDrive] End of disc reached.\n";
         _state = DriveState::Idle;
         return;
     }
 
-    if (_isMultiTrack && _currentLba >= 10000) {
-        _state = DriveState::PlayingAudio;
-        streamAudioSector(_currentLba);
-    } else {
+    // Se l'host fa uno Strobe mentre siamo in IDLE o DATA mode, serviamo un settore dati
+    if (_state == DriveState::Idle || _state == DriveState::ReadingData) 
+    {
         _state = DriveState::ReadingData;
         transferDataSector(_currentLba);
+        _currentLba++;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+void CdDrive::streamAudioSector(size_t lba) 
+{
+    if( !_binFile.isOpen() )
+    {
+        std::cout << "[CdDrive] Attempt to stream audio from unopened BIN file.\n";
+        return;
     }
 
-    _currentLba++;
+    // 1. Recupera la traccia corrente per calcolare l'offset relativo al file binario
+    const auto track = _map.getTrackAtSector(lba);
+    if (!track) {
+        std::cout << "[CdDrive] Error: No track mapping found for LBA " << lba << "\n";
+        return;
+    }
+
+    // 2. Calcola il settore relativo interno a questo specifico file .bin
+    size_t relativeSector = (lba - track->startSector) + track->localOffsetSector;
+
+    Sector s;
+    auto ok = _binFile.readSectorAt( relativeSector, s);
+
+    if( ok == BinFile::ErrorCode::EndOfFile )
+    {
+        std::cout << "[CdDrive] End of track reached. Stopping audio playback.\n";
+        stop();
+        return;
+    }
+
+    if( ok != BinFile::ErrorCode::NoError )
+    {
+        std::cout << "[CdDrive] Error during reading audio from BIN file.\n";
+        return;        
+    }
+
+    if( _audioPlayer )
+        _audioPlayer->feedSector( s );
 }
 
-void CdDrive::streamAudioSector(size_t lba) {
-    std::cout << "[Audio Engine] Outputting PCM LBA: " << lba << "\r" << std::flush;
-}
-
-void CdDrive::transferDataSector(size_t lba) {
+// ------------------------------------------------------------------------------------------------
+void CdDrive::transferDataSector(size_t lba) 
+{
     std::cout << "[PIO Engine] Delivering data sector: " << lba << " to parallel port.\n";
 }

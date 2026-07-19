@@ -2,6 +2,8 @@
 //
 #include "DeviceController.hpp"
 
+#include "PwmBuzzerPlayer.hpp"
+
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
@@ -10,6 +12,7 @@
 
 constexpr uint32_t strobePin = 14;
 constexpr uint32_t ejectPin = 15;
+constexpr uint32_t dacPin   = 20;
 
 // ------------------------------------------------------------------------------------------------
 void DeviceController::init()
@@ -25,22 +28,47 @@ void DeviceController::init()
     std::cout << "\n=== AmiCDBox32 System Controller Initialized ===\n";
     std::cout << "Ready in COMMAND mode. Type VERSION, LIST, MOUNT, PLAY, STOP or EJECT.\n";
     std::cout << "================================================\n";
+
+    _drive = CdDrive( new PwmBuzzerPlayer(dacPin));
 }
 
 // ------------------------------------------------------------------------------------------------
 void DeviceController::update()
 {
     // 1. Handle Serial Console in Command Mode
-    if (_systemMode == SystemMode::Command)
+    const auto input = readConsoleInput();
+    if( !input.empty() )
     {
-        std::string input = readConsoleInput();
-        if (!input.empty())
+        if ( input == "EJECT" )
         {
-            processCommand(input);
+            cmdEject();
+        }
+        else if (_systemMode == SystemMode::Command) 
+        {
+            processConfigCommand(input);
+        }
+        else if (_systemMode == SystemMode::Storage) 
+        {
+            processHostCommand(input);
+        }
+    }
+  
+
+    // 2. Autonomous time management for AUDIO streaming (CD-DA at 75Hz)
+    if (_drive.getState() == DriveState::PlayingAudio)
+    {
+        static uint64_t nextSectorTimeUs = 0;
+        uint64_t currentTimeUs = time_us_64();
+
+        if (currentTimeUs >= nextSectorTimeUs)
+        {
+            // Set deadline for the next sector (~13.33 ms)
+            nextSectorTimeUs = currentTimeUs + 13333;
+            _drive.tickAudio();
         }
     }
 
-    // 2. Monitor physical buttons (active-low)
+    // 3. Monitor physical buttons (active-low)
     bool currentStrobe = gpio_get(strobePin);
     bool currentEject = gpio_get(ejectPin);
 
@@ -59,39 +87,31 @@ void DeviceController::update()
     _lastStrobeState = currentStrobe;
     _lastEjectState = currentEject;
 
-    sleep_ms(10);
+    sleep_ms(1); // Keep loop fast for tight audio audio tick polling
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::processCommand(std::string_view commandLine)
+void DeviceController::processConfigCommand(std::string_view commandLine)
 {
-    if (commandLine == "LIST")
-    {
+    if (commandLine == "LIST") {
         cmdList();
-    }
-    else if (commandLine.starts_with("MOUNT "))
-    {
+    } else if (commandLine.starts_with("MOUNT ")) {
         cmdMount(commandLine.substr(6));
-    }
-    else if (commandLine == "EJECT")
-    {
-        cmdEject();
-    }
-    else if (commandLine.starts_with("PLAY"))
-    {
-        cmdPlay(commandLine.substr(4)); // Safe even if empty
-    }
-    else if (commandLine == "STOP")
-    {
-        cmdStop();
-    }
-    else if (commandLine == "VERSION")
-    {
+    } else if (commandLine == "VERSION") {
         cmdVersion();
+    } else {
+        std::cout << "[System] Invalid command. Available in CONFIG mode: LIST, MOUNT, EJECT, VERSION.\n";
     }
-    else
-    {
-        std::cout << "[System] Unknown command: " << commandLine << "\n";
+}
+
+void DeviceController::processHostCommand(std::string_view commandLine)
+{
+    if (commandLine.starts_with("PLAY")) {
+        cmdPlay(commandLine.substr(4));
+    } else if (commandLine == "STOP") {
+        cmdStop();
+    } else {
+        std::cout << "[Amiga Bus] Ignored. Available in STORAGE mode: PLAY, STOP, EJECT.\n";
     }
 }
 
@@ -110,12 +130,24 @@ void DeviceController::cmdVersion()
 // ------------------------------------------------------------------------------------------------
 void DeviceController::cmdMount(std::string_view filename)
 {
-    if( !initializeFileSystem() )
+    if (!initializeFileSystem())
     {
         std::cout << "[System] Mount failed: storage not ready.\n";
         return;
     }
 
+    // absolute file path for f_stat
+    const std::string fullPath = "0:/" + std::string(filename);
+    
+    // check if exists
+    FILINFO fileInfo;
+    if (f_stat(fullPath.c_str(), &fileInfo) != FR_OK)
+    {
+        std::cout << "[System] Error: File '" << filename << "' not found on MicroSD.\n";
+        return;
+    }
+
+    // the provided filename can be mounted
     if (_drive.mount(filename))
     {
         _systemMode = SystemMode::Storage;
@@ -264,30 +296,62 @@ bool DeviceController::initializeFileSystem()
 // ------------------------------------------------------------------------------------------------
 std::vector<std::string> DeviceController::fileList()
 {
-    if (!initializeFileSystem())
+if (!initializeFileSystem())
         return {};
     
-    DIR directory;
+    DIR rootDir;
     FILINFO fileInfo;
+    std::vector<std::string> files;
     
-    // Open the root directory of the MicroSD card
-    FRESULT result = f_opendir(&directory, "0:/");
-    if (result != FR_OK) 
+    if (f_opendir(&rootDir, "0:/") != FR_OK) 
     {
-        std::cout << "[Storage] Cannot open root directory. Error: " << static_cast<int>(result) << "\n";
+        std::cout << "[Storage] Cannot open root directory.\n";
         return {};
     }
 
-    std::vector<std::string> files;
-
-    // Iterate through all files in the root directory
-    while (f_readdir(&directory, &fileInfo) == FR_OK && fileInfo.fname[0] != 0)
-     {
-        // Skip directories, we only look for image files and cues
-        if (!(fileInfo.fattrib & AM_DIR))
-            files.emplace_back(fileInfo.fname);
+    while (f_readdir(&rootDir, &fileInfo) == FR_OK && fileInfo.fname[0] != 0)
+    {
+        std::string_view fname(fileInfo.fname);
+        
+        if (fileInfo.fattrib & AM_DIR) 
+        {
+            // skip folder references
+            if (fname == "." || fname == "..") 
+                continue;
+            
+            // open subfolder
+            DIR subDir;
+            const std::string subPath = "0:/" + std::string(fname);
+            if (f_opendir(&subDir, subPath.c_str()) == FR_OK) 
+            {
+                FILINFO subFileInfo;
+                while (f_readdir(&subDir, &subFileInfo) == FR_OK && subFileInfo.fname[0] != 0) 
+                {
+                    if (!(subFileInfo.fattrib & AM_DIR)) 
+                    {
+                        const std::string_view subFname(subFileInfo.fname);
+                        // Filtriamo per estensioni valide (case-insensitive di base)
+                        if (subFname.ends_with(".cue") || subFname.ends_with(".CUE") || 
+                            subFname.ends_with(".iso") || subFname.ends_with(".ISO")) 
+                        {
+                            files.push_back(std::string(fname) + "/" + subFileInfo.fname);
+                        }
+                    }
+                }
+                f_closedir(&subDir);
+            }
+        } 
+        else 
+        {
+            // list any iso/cue in root folder
+            if (fname.ends_with(".cue") || fname.ends_with(".CUE") || 
+                fname.ends_with(".iso") || fname.ends_with(".ISO")) 
+            {
+                files.push_back(fileInfo.fname);
+            }
+        }
     }
 
-    f_closedir(&directory);
+    f_closedir(&rootDir);
     return files;
 }
