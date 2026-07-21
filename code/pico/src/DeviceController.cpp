@@ -57,15 +57,16 @@ void DeviceController::update()
     // 2. Autonomous time management for AUDIO streaming (CD-DA at 75Hz)
     if (_drive.getState() == DriveState::PlayingAudio)
     {
-        static uint64_t nextSectorTimeUs = 0;
-        uint64_t currentTimeUs = time_us_64();
+        _drive.tickAudio();
+        // static uint64_t nextSectorTimeUs = 0;
+        // uint64_t currentTimeUs = time_us_64();
 
-        if (currentTimeUs >= nextSectorTimeUs)
-        {
-            // Set deadline for the next sector (~13.33 ms)
-            nextSectorTimeUs = currentTimeUs + 13333;
-            _drive.tickAudio();
-        }
+        // if (currentTimeUs >= nextSectorTimeUs)
+        // {
+        //     // Set deadline for the next sector (~13.33 ms)
+        //     nextSectorTimeUs = currentTimeUs + 13333;
+        //     _drive.tickAudio();
+        // }
     }
 
     // 3. Monitor physical buttons (active-low)

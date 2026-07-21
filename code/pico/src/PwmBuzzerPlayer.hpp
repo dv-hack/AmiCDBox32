@@ -18,4 +18,9 @@ public:
 private:
     uint32_t _dacPin;
     bool _isActive = false;
+
+    int _dmaChannel = -1;
+    int _currentBuffer = 0;
+
+    uint32_t _sampleBuffer[2][588];
 };
