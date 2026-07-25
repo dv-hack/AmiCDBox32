@@ -3,8 +3,6 @@
 #pragma once
 
 #include "IAudioPlayer.hpp"
-#include "Sector.hpp"
-
 
 class PwmBuzzerPlayer : public IAudioPlayer
 {

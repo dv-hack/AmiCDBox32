@@ -38,16 +38,20 @@ add_executable(AmiCDBox32
     src/CdMap.hpp
     src/CueParser.cpp
     src/CueParser.hpp
-    src/DeviceController.cpp
+    src/DeviceControllerGPIO.cpp
+    src/DeviceControllerGPIO.hpp
+    src/DeviceControllerUSB.cpp
+    src/DeviceControllerUSB.hpp    
     src/DeviceController.hpp
     src/IAudioPlayer.hpp
     src/PwmBuzzerPlayer.cpp
     src/PwmBuzzerPlayer.hpp
     src/Sector.hpp
-    src/TinyUSBHandlers.cpp
-    src/TinyUSBHandlers.hpp
+    src/SDCardHandler.cpp
+    src/SDCardHandler.hpp
     src/tusb_config.h
     src/usb_descriptors.c
+    src/Version.hpp
 )
 
 target_include_directories(AmiCDBox32 BEFORE PRIVATE

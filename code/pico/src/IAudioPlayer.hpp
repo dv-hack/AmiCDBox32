@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 
-class Sector;
+#include "Sector.hpp"
 
 class IAudioPlayer
 {

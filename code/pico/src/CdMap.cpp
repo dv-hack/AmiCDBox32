@@ -53,7 +53,7 @@ CdMap buildCdMap( std::string_view filename )
         t.number = 1;
         t.type = TrackType::Data;
         t.startSector = 0;
-        t.binFilename = rootFolder + "/todo.iso";
+        t.binFilename = rootFolder + std::string(filename);
 
         CdMap cdMap;
         cdMap.tracks.push_back(t);

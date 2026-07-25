@@ -1,8 +1,9 @@
-// DeviceController.cpp
+// DeviceControllerGPIO.cpp
 //
-#include "DeviceController.hpp"
+#include "DeviceControllerGPIO.hpp"
 
 #include "PwmBuzzerPlayer.hpp"
+#include "Version.hpp"
 
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
@@ -15,8 +16,11 @@ constexpr uint32_t ejectPin = 15;
 constexpr uint32_t dacPin   = 20;
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::init()
+void DeviceControllerGPIO::init()
 {
+    stdio_init_all();
+    sleep_ms(2000); // Allow USB serial to hook up
+
     gpio_init(strobePin);
     gpio_set_dir(strobePin, GPIO_IN);
     gpio_pull_up(strobePin);
@@ -33,7 +37,7 @@ void DeviceController::init()
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::update()
+void DeviceControllerGPIO::update()
 {
     // 1. Handle Serial Console in Command Mode
     const auto input = readConsoleInput();
@@ -56,18 +60,7 @@ void DeviceController::update()
 
     // 2. Autonomous time management for AUDIO streaming (CD-DA at 75Hz)
     if (_drive.getState() == DriveState::PlayingAudio)
-    {
         _drive.tickAudio();
-        // static uint64_t nextSectorTimeUs = 0;
-        // uint64_t currentTimeUs = time_us_64();
-
-        // if (currentTimeUs >= nextSectorTimeUs)
-        // {
-        //     // Set deadline for the next sector (~13.33 ms)
-        //     nextSectorTimeUs = currentTimeUs + 13333;
-        //     _drive.tickAudio();
-        // }
-    }
 
     // 3. Monitor physical buttons (active-low)
     bool currentStrobe = gpio_get(strobePin);
@@ -92,7 +85,7 @@ void DeviceController::update()
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::processConfigCommand(std::string_view commandLine)
+void DeviceControllerGPIO::processConfigCommand(std::string_view commandLine)
 {
     if (commandLine == "LIST") {
         cmdList();
@@ -105,7 +98,7 @@ void DeviceController::processConfigCommand(std::string_view commandLine)
     }
 }
 
-void DeviceController::processHostCommand(std::string_view commandLine)
+void DeviceControllerGPIO::processHostCommand(std::string_view commandLine)
 {
     if (commandLine.starts_with("PLAY")) {
         cmdPlay(commandLine.substr(4));
@@ -117,7 +110,7 @@ void DeviceController::processHostCommand(std::string_view commandLine)
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdVersion()
+void DeviceControllerGPIO::cmdVersion()
 {
     std::cout << "\n--- AmiCDBox32 System Information ---\n";
     std::cout << "Firmware Version: " << FirmwareVersion << '\n';
@@ -129,24 +122,20 @@ void DeviceController::cmdVersion()
 
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdMount(std::string_view filename)
+void DeviceControllerGPIO::cmdMount(std::string_view filename)
 {
-    if (!initializeFileSystem())
+    if (!_sdCard.mount())
     {
         std::cout << "[System] Mount failed: storage not ready.\n";
         return;
     }
 
-    // absolute file path for f_stat
-    const std::string fullPath = "0:/" + std::string(filename);
-    
-    // check if exists
-    FILINFO fileInfo;
-    if (f_stat(fullPath.c_str(), &fileInfo) != FR_OK)
+    if( !_sdCard.fileExists( std::string(filename) ))
     {
         std::cout << "[System] Error: File '" << filename << "' not found on MicroSD.\n";
         return;
     }
+
 
     // the provided filename can be mounted
     if (_drive.mount(filename))
@@ -158,11 +147,11 @@ void DeviceController::cmdMount(std::string_view filename)
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdList()
+void DeviceControllerGPIO::cmdList()
 {
     std::cout << "[System] Scanning MicroSD root directory...\n";
     
-    auto files = fileList();
+    auto files = _sdCard.fileList();
     if (files.empty()) 
     {
         std::cout << "[System] No files found or SD card unreadable.\n";
@@ -177,7 +166,7 @@ void DeviceController::cmdList()
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdEject()
+void DeviceControllerGPIO::cmdEject()
 {
     if (_drive.getState() == DriveState::NoMedia) {
         std::cout << "[System] No media is currently mounted.\n";
@@ -185,17 +174,15 @@ void DeviceController::cmdEject()
     }
 
     _drive.eject();
+    _sdCard.unmount();
 
-    // unmount fatfs
-    f_mount(nullptr, "0:", 0);
-    _sdInitialized = false;
     
     _systemMode = SystemMode::Command;
     std::cout << "[System] Switching back to COMMAND MODE.\n";
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdPlay(std::string_view args)
+void DeviceControllerGPIO::cmdPlay(std::string_view args)
 {
     if (_drive.getState() == DriveState::NoMedia)
     {
@@ -228,13 +215,13 @@ void DeviceController::cmdPlay(std::string_view args)
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::cmdStop()
+void DeviceControllerGPIO::cmdStop()
 {
     _drive.stop();
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::handleStrobeTrigger()
+void DeviceControllerGPIO::handleStrobeTrigger()
 {
     if (_systemMode == SystemMode::Storage)
     {
@@ -247,14 +234,14 @@ void DeviceController::handleStrobeTrigger()
 }
 
 // ------------------------------------------------------------------------------------------------
-void DeviceController::handleEjectTrigger()
+void DeviceControllerGPIO::handleEjectTrigger()
 {
     std::cout << "[System] Physical Eject Button Pressed.\n";
     cmdEject();
 }
 
 // ------------------------------------------------------------------------------------------------
-std::string DeviceController::readConsoleInput()
+std::string DeviceControllerGPIO::readConsoleInput()
 {
     static std::string buffer = "";
     int character = getchar_timeout_us(0);
@@ -273,86 +260,4 @@ std::string DeviceController::readConsoleInput()
         character = getchar_timeout_us(0);
     }
     return "";
-}
-
-// ------------------------------------------------------------------------------------------------
-bool DeviceController::initializeFileSystem()
-{
-    if( _sdInitialized )
-        return true;
-
-    // FfatFs mount: volume 0, 1 = force mount immediately to verify hardware
-    FRESULT result = f_mount(&_fileSystem, "0:", 1);
-    if (result != FR_OK) 
-    {
-        std::cout << "[Storage] Failed to mount FAT32 File System. Error code: " << static_cast<int>(result) << "\n";
-        return false;
-    }
-
-    std::cout << "[Storage] FAT32 File System successfully mounted.\n";
-    _sdInitialized = true;
-    return true;        
-}
-
-// ------------------------------------------------------------------------------------------------
-std::vector<std::string> DeviceController::fileList()
-{
-if (!initializeFileSystem())
-        return {};
-    
-    DIR rootDir;
-    FILINFO fileInfo;
-    std::vector<std::string> files;
-    
-    if (f_opendir(&rootDir, "0:/") != FR_OK) 
-    {
-        std::cout << "[Storage] Cannot open root directory.\n";
-        return {};
-    }
-
-    while (f_readdir(&rootDir, &fileInfo) == FR_OK && fileInfo.fname[0] != 0)
-    {
-        std::string_view fname(fileInfo.fname);
-        
-        if (fileInfo.fattrib & AM_DIR) 
-        {
-            // skip folder references
-            if (fname == "." || fname == "..") 
-                continue;
-            
-            // open subfolder
-            DIR subDir;
-            const std::string subPath = "0:/" + std::string(fname);
-            if (f_opendir(&subDir, subPath.c_str()) == FR_OK) 
-            {
-                FILINFO subFileInfo;
-                while (f_readdir(&subDir, &subFileInfo) == FR_OK && subFileInfo.fname[0] != 0) 
-                {
-                    if (!(subFileInfo.fattrib & AM_DIR)) 
-                    {
-                        const std::string_view subFname(subFileInfo.fname);
-                        // Filtriamo per estensioni valide (case-insensitive di base)
-                        if (subFname.ends_with(".cue") || subFname.ends_with(".CUE") || 
-                            subFname.ends_with(".iso") || subFname.ends_with(".ISO")) 
-                        {
-                            files.push_back(std::string(fname) + "/" + subFileInfo.fname);
-                        }
-                    }
-                }
-                f_closedir(&subDir);
-            }
-        } 
-        else 
-        {
-            // list any iso/cue in root folder
-            if (fname.ends_with(".cue") || fname.ends_with(".CUE") || 
-                fname.ends_with(".iso") || fname.ends_with(".ISO")) 
-            {
-                files.push_back(fileInfo.fname);
-            }
-        }
-    }
-
-    f_closedir(&rootDir);
-    return files;
 }

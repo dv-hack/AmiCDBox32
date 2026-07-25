@@ -1,7 +1,5 @@
 // main.cpp
 //
-#include "DeviceController.hpp"
-
 #include "pico/stdlib.h"
 #include "hw_config.h"
 #include "spi.h"
@@ -10,9 +8,11 @@
 
 #define TINY_USB_MODE
 #if defined TINY_USB_MODE
-#include "bsp/board.h"
-#include "tusb.h"
+#include "DeviceControllerUSB.hpp"
+#else
+#include "DeviceControllerGPIO.hpp"
 #endif
+
 
 // 1. Configurazione del blocco hardware SPI (SPI 0)
 static spi_t spis[] = {
@@ -57,33 +57,17 @@ extern "C" sd_card_t *sd_get_by_num(size_t num) {
 
 int main()
 {
+    
 #if defined TINY_USB_MODE
-    board_init();
-    //stdio_init_all();
-    tusb_init();
-
-    // Inizializza la tua logica di lettura SD e CdMap
-    // cdDrive->init();
-
-    while (1)
-    {
-        // Motore TinyUSB (gestisce l'handshake in background e chiama le callback)
-        tud_task(); 
-        
-        // Se volessi gestire un bottone hardware fisico o la UI
-        // uiController->update();
-    }    
-
+    DeviceController* controller = new DeviceControllerUSB;
 #else
-    stdio_init_all();
-    sleep_ms(2000); // Allow USB serial to hook up
-
-    DeviceController controller;
-    controller.init();
-
-    while (true)
-    {
-        controller.update();
-    }
+    DeviceController* controller = new DeviceControllerGPIO;
 #endif
+
+
+    controller->init();
+    controller->updateLoop();
+    
+    
+    delete controller;
 }

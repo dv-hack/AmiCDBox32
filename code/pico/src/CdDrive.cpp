@@ -45,6 +45,31 @@ void CdDrive::eject()
     std::cout << "[CdDrive] Media logically ejected.\n";
 }
 
+
+// ------------------------------------------------------------------------------------------------
+bool CdDrive::readDataToBuffer(size_t lba, uint16_t block_count, std::vector<uint8_t> &buffer)
+{
+    if (!_binFile.isOpen() || _state == DriveState::NoMedia)
+        return false;
+
+    // Leggiamo i settori sequenzialmente nel buffer
+    for (uint16_t i = 0; i < block_count; ++i)
+    {
+        Sector s(2048);
+        // Nota: Assumiamo che readSectorAt gestisca l'offset interno al file BIN
+        auto ok = _binFile.readSectorAt(lba + i, s); 
+        
+        if (ok != BinFile::ErrorCode::NoError)
+            return false;
+
+        // Copiamo i 2048 byte del settore dati nel buffer di destinazione
+        buffer.insert( buffer.end(), s.bytes.begin(), s.bytes.end() );
+    }
+    
+    return true;
+}
+
+
 // ------------------------------------------------------------------------------------------------
 void CdDrive::play(size_t targetLba) 
 {
@@ -187,7 +212,7 @@ void CdDrive::streamAudioSector(size_t lba)
     // 2. Calcola il settore relativo interno a questo specifico file .bin
     size_t relativeSector = (lba - track->startSector) + track->localOffsetSector;
 
-    Sector s;
+    Sector s(2352);
     auto ok = _binFile.readSectorAt( relativeSector, s);
 
     if( ok == BinFile::ErrorCode::EndOfFile )

@@ -65,14 +65,14 @@ BinFile::ErrorCode BinFile::readSectorAt( size_t lba, Sector &s )
         return ErrorCode::FileOperationError;
     }
 
-    const FSIZE_t offset = static_cast<FSIZE_t>(lba) * kSectorSize;
+    const FSIZE_t offset = static_cast<FSIZE_t>(lba) * s.size;
     f_lseek(&_file->file, offset);
 
     
     UINT bytesRead;    
-    f_read(&_file->file, s.bytes, kSectorSize, &bytesRead);
+    f_read(&_file->file, &s.bytes[0], s.size, &bytesRead);
     
-    if (bytesRead != kSectorSize )
+    if (bytesRead != s.size )
     {
         std::cout << "[BinFile] End of BIN file reached.\n";
         return ErrorCode::EndOfFile;

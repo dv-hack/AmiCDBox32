@@ -30,6 +30,7 @@ public:
     bool mount(std::string_view filename);
     void eject();
     
+    bool readDataToBuffer( size_t lba, uint16_t blockCount, std::vector<uint8_t> &buffer );
     void play(size_t targetLba);
     void playTrack(int trackNumber);
     void stop();
@@ -40,6 +41,10 @@ public:
     size_t           getCurrentLba() const { return _currentLba; }
 
     void tickAudio();
+
+private:
+    void streamAudioSector(size_t lba);
+    void transferDataSector(size_t lba);
 
 private:
     DriveState _state = DriveState::NoMedia;
@@ -53,7 +58,4 @@ private:
     size_t _currentLba = 0;
     size_t _totalSectors = 0;
     bool _isMultiTrack = false;
-
-    void streamAudioSector(size_t lba);
-    void transferDataSector(size_t lba);
 };

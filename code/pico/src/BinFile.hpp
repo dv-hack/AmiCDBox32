@@ -2,11 +2,12 @@
 //
 #pragma once
 
+#include "Sector.hpp"
+
 #include <string_view>
 #include <cstdint>
 #include <memory>
 
-struct Sector;
 
 class BinFile
 {
