@@ -8,6 +8,11 @@
 #include "sd_card.h"
 #include "diskio.h"
 
+#define TINY_USB_MODE
+#if defined TINY_USB_MODE
+#include "bsp/board.h"
+#include "tusb.h"
+#endif
 
 // 1. Configurazione del blocco hardware SPI (SPI 0)
 static spi_t spis[] = {
@@ -48,9 +53,28 @@ extern "C" sd_card_t *sd_get_by_num(size_t num) {
     return nullptr;
 }
 
+#define TINYUSB_MODE
 
 int main()
 {
+#if defined TINY_USB_MODE
+    board_init();
+    //stdio_init_all();
+    tusb_init();
+
+    // Inizializza la tua logica di lettura SD e CdMap
+    // cdDrive->init();
+
+    while (1)
+    {
+        // Motore TinyUSB (gestisce l'handshake in background e chiama le callback)
+        tud_task(); 
+        
+        // Se volessi gestire un bottone hardware fisico o la UI
+        // uiController->update();
+    }    
+
+#else
     stdio_init_all();
     sleep_ms(2000); // Allow USB serial to hook up
 
@@ -61,4 +85,5 @@ int main()
     {
         controller.update();
     }
+#endif
 }

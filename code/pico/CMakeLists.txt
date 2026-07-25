@@ -44,6 +44,14 @@ add_executable(AmiCDBox32
     src/PwmBuzzerPlayer.cpp
     src/PwmBuzzerPlayer.hpp
     src/Sector.hpp
+    src/TinyUSBHandlers.cpp
+    src/TinyUSBHandlers.hpp
+    src/tusb_config.h
+    src/usb_descriptors.c
+)
+
+target_include_directories(AmiCDBox32 BEFORE PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # Set C++20 standard requirements
@@ -55,13 +63,15 @@ pico_stdlib
 hardware_spi
 hardware_pwm
 FatFs_SPI
+tinyusb_device
+tinyusb_board
 )
 
 pico_set_program_name(AmiCDBox32 "AmiCDBox32")
 pico_set_program_version(AmiCDBox32 "0.3.0")
 
 # Enable USB serial output (instead of hardware UART)
-pico_enable_stdio_usb(AmiCDBox32 1)
+pico_enable_stdio_usb(AmiCDBox32 0)
 pico_enable_stdio_uart(AmiCDBox32 0)
 
 # Generate the .uf2 file automatically
