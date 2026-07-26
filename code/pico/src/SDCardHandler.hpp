@@ -2,10 +2,9 @@
 //
 #pragma once
 
-#include "ff.h"
-
 #include <vector>
 #include <string>
+#include <memory>
 
 class SDCardHandler
 {
@@ -15,9 +14,9 @@ public:
 
     bool fileExists( const std::string &filename ) const;
 
-    std::vector<std::string> fileList( /*filters...*/);
+    std::vector<std::string> fileList( /*filters...*/) const;
 
 private:
-    FATFS _fileSystem;
-    bool _mounted{false};
+    struct FileSystem;
+    std::unique_ptr<FileSystem> _fileSystem;
 };

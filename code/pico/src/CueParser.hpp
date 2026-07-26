@@ -4,12 +4,12 @@
 
 #include <string_view>
 
-class CdMap;
+class Disc;
 
 class CueParser
 {
 public:
-    static CdMap parse( std::string_view rootFolder, std::string_view cueContent);
+    static Disc parse( std::string_view rootFolder, std::string_view cueContent);
 
 private:
 };

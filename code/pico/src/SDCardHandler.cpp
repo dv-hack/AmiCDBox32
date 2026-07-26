@@ -2,18 +2,28 @@
 //
 #include "SDCardHandler.hpp"
 
+#include "ff.h"
+
 #include <iostream>
 #include <algorithm>
 #include <string_view>
 
 // ------------------------------------------------------------------------------------------------
+struct SDCardHandler::FileSystem
+{
+    FATFS fs;
+};
+
+// ------------------------------------------------------------------------------------------------
 bool SDCardHandler::mount()
 {
-    if( _mounted )
+    if( _fileSystem )
         return true;
 
+    _fileSystem = std::make_unique<FileSystem>();
+
     // FfatFs mount: volume 0, 1 = force mount immediately to verify hardware
-    FRESULT result = f_mount(&_fileSystem, "0:", 1);
+    FRESULT result = f_mount(&_fileSystem->fs, "0:", 1);
     if (result != FR_OK) 
     {
         std::cout << "[Storage] Failed to mount FAT32 File System. Error code: " << static_cast<int>(result) << "\n";
@@ -21,21 +31,26 @@ bool SDCardHandler::mount()
     }
 
     std::cout << "[Storage] FAT32 File System successfully mounted.\n";
-    _mounted = true;
     return true;        
 }
 
 // ------------------------------------------------------------------------------------------------
 void SDCardHandler::unmount()
 {
-        // unmount fatfs
+    if( !_fileSystem )
+        return;
+
+    // unmount fatfs
     f_mount(nullptr, "0:", 0);
-    _mounted = false;
+    _fileSystem.reset();
 }
 
 // ------------------------------------------------------------------------------------------------
 bool SDCardHandler::fileExists( const std::string &filename ) const
 {
+    if( !_fileSystem )
+        return false;
+
     std::string fullPath = filename;
     if( !fullPath.starts_with("0:/"))
         fullPath = "0:/" + std::string(filename);
@@ -47,9 +62,9 @@ bool SDCardHandler::fileExists( const std::string &filename ) const
 
 
 // ------------------------------------------------------------------------------------------------
-std::vector<std::string> SDCardHandler::fileList()
+std::vector<std::string> SDCardHandler::fileList() const
 {
-    if (!mount())
+    if (!_fileSystem)
         return {};
     
     DIR rootDir;

@@ -2,9 +2,8 @@
 //
 #pragma once
 
-#include "CdMap.hpp"
+#include "Disc.hpp"
 #include "IAudioPlayer.hpp"
-#include "BinFile.hpp"
 
 #include <string>
 #include <vector>
@@ -27,7 +26,7 @@ public:
     {}
 
 
-    bool mount(std::string_view filename);
+    bool mountDisc(std::string_view filename);
     void eject();
     
     bool readDataToBuffer( size_t lba, uint16_t blockCount, uint8_t* buffer );
@@ -40,7 +39,7 @@ public:
     std::string_view getMountedFile() const { return _mountedFile; }
     size_t           getCurrentLba() const { return _currentLba; }
 
-    CdMap &disc() {return _map;}
+    Disc &disc() { return _disc;}
 
     void tickAudio();
 
@@ -50,13 +49,13 @@ private:
 
 private:
     DriveState _state = DriveState::NoMedia;
-    std::string _mountedFile = "";
+    //std::string _mountedFile = "";
     
-    CdMap _map; // Table of Contents
+    Disc _disc; // Table of Contents
     std::unique_ptr<IAudioPlayer> _audioPlayer;
     
     
-    size_t _currentLba = 0;
-    size_t _totalSectors = 0;
-    bool _isMultiTrack = false;
+    // size_t _currentLba = 0;
+    // size_t _totalSectors = 0;
+    // bool _isMultiTrack = false;
 };

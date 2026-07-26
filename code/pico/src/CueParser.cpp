@@ -27,9 +27,9 @@ static inline size_t msfToLBA(std::string_view msfStr)
 }
 
 // ------------------------------------------------------------------------------------------------
-CdMap CueParser::parse(std::string_view rootFolder, std::string_view cueContent)
+Disc CueParser::parse(std::string_view rootFolder, std::string_view cueContent)
 {
-    CdMap map;
+    Disc map;
     map.rootFolder = std::string(rootFolder);
     
     std::string line;
