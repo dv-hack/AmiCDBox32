@@ -2,6 +2,8 @@
 //
 #include "BinFile.hpp"
 
+#include "LedDebugger.hpp"
+
 #include "Sector.hpp"
 
 #include "ff.h"
@@ -17,10 +19,8 @@ struct BinFile::BinFileRaw
 };
 
 // ------------------------------------------------------------------------------------------------
-BinFile::BinFile() = default;
-BinFile::~BinFile() = default;
-BinFile::BinFile(BinFile&&) noexcept = default;
-BinFile& BinFile::operator=(BinFile&&) noexcept = default;
+BinFile::BinFile( std::string_view filename ) { open( filename );}
+BinFile::~BinFile() { close();}
 
 // ------------------------------------------------------------------------------------------------
 BinFile::ErrorCode BinFile::open( std::string_view filename )
@@ -55,6 +55,14 @@ BinFile::ErrorCode BinFile::close()
     return ErrorCode::NoError;
 }
 
+// ------------------------------------------------------------------------------------------------
+uint32_t BinFile::totalSectors() const
+{
+    if( _file == nullptr )
+        return 0;
+    FSIZE_t size = f_size(&_file->file); 
+    return static_cast<uint32_t>(size / 2048);
+}
 
 // ------------------------------------------------------------------------------------------------
 BinFile::ErrorCode BinFile::readSectorAt( size_t lba, Sector &s )
@@ -71,10 +79,17 @@ BinFile::ErrorCode BinFile::readSectorAt( size_t lba, Sector &s )
     
     UINT bytesRead;    
     f_read(&_file->file, &s.bytes[0], s.size, &bytesRead);
+
+    if( bytesRead == 2353 )
+        setActivityLed(false);
+
+    if( bytesRead >0 && bytesRead < s.size )
+        setActivityLed(false);
     
     if (bytesRead != s.size )
     {
         std::cout << "[BinFile] End of BIN file reached.\n";
+        setErrorLed(true);
         return ErrorCode::EndOfFile;
     }
 

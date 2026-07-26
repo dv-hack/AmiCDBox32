@@ -2,12 +2,15 @@
 //
 #include "CdDrive.hpp"
 
+#include "LedDebugger.hpp"
+
 #include "Sector.hpp"
 
 #include "pico/stdlib.h"
 
 #include <iostream>
 #include <algorithm>
+#include <memory.h>
 
 // ------------------------------------------------------------------------------------------------
 bool CdDrive::mount(std::string_view filename) 
@@ -47,23 +50,38 @@ void CdDrive::eject()
 
 
 // ------------------------------------------------------------------------------------------------
-bool CdDrive::readDataToBuffer(size_t lba, uint16_t block_count, std::vector<uint8_t> &buffer)
+bool CdDrive::readDataToBuffer(size_t lba, uint16_t block_count, uint8_t* buffer)
 {
-    if (!_binFile.isOpen() || _state == DriveState::NoMedia)
+    if (_state == DriveState::NoMedia)
         return false;
 
+    auto track = _map.getTrackAtSector( lba );
+    size_t relativeSector = (lba - track->startSector) + track->localOffsetSector;
+    relativeSector = lba;  // just for debug
     // Leggiamo i settori sequenzialmente nel buffer
     for (uint16_t i = 0; i < block_count; ++i)
     {
-        Sector s(2048);
-        // Nota: Assumiamo che readSectorAt gestisca l'offset interno al file BIN
-        auto ok = _binFile.readSectorAt(lba + i, s); 
-        
+        Sector s( track->sectorSize );
+        auto ok = track->binFile->readSectorAt( relativeSector+i,s );
+
         if (ok != BinFile::ErrorCode::NoError)
+        {
+            //setErrorLed(true);
             return false;
+        }
+
+        // // Nota: Assumiamo che readSectorAt gestisca l'offset interno al file BIN
+        // auto ok = _binFile.readSectorAt(lba + i, s); 
+        
+        // if (ok != BinFile::ErrorCode::NoError)
+        // {
+        //     setErrorLed(true);
+        //     return false;
+        // }
 
         // Copiamo i 2048 byte del settore dati nel buffer di destinazione
-        buffer.insert( buffer.end(), s.bytes.begin(), s.bytes.end() );
+        //buffer.insert( buffer.end(), s.bytes.begin(), s.bytes.end() );
+        memcpy(buffer + (i * 2048), &s.bytes[0], 2048);
     }
     
     return true;
@@ -75,25 +93,21 @@ void CdDrive::play(size_t targetLba)
 {
     if (_state == DriveState::NoMedia)
         return;
-    
-    _currentLba = targetLba;
 
-    if( _binFile.isOpen() )
-    {
-        std::cout << "[CdDrive] Audio already playing.\n";
-        return;
-    }
+    
+        
+    _currentLba = targetLba;
 
     const auto track = _map.getTrackAtSector(targetLba);
     if( track && track->type == TrackType::Audio )
     {
-        const auto filename = _map.rootFolder + track->binFilename;
+        // const auto filename = _map.rootFolder + track->binFilename;
    
-        if( _binFile.open( filename ) != BinFile::ErrorCode::NoError )
-        {
-            std::cout << "[CdDrive] Could not play audio from file "<< filename <<"\n";
-            return;
-        }    
+        // if( _binFile.open( filename ) != BinFile::ErrorCode::NoError )
+        // {
+        //     std::cout << "[CdDrive] Could not play audio from file "<< filename <<"\n";
+        //     return;
+        // }    
         
         _state = DriveState::PlayingAudio;
         if( _audioPlayer )
@@ -146,7 +160,7 @@ void CdDrive::stop()
         if (_audioPlayer)
             _audioPlayer->stopPlayback();
         
-        _binFile.close();
+        //_binFile.close();
         std::cout << "[CdDrive] Audio playback stopped. File closed.\n";
     }
 }
@@ -196,11 +210,11 @@ void CdDrive::advanceSector()
 // ------------------------------------------------------------------------------------------------
 void CdDrive::streamAudioSector(size_t lba) 
 {
-    if( !_binFile.isOpen() )
-    {
-        std::cout << "[CdDrive] Attempt to stream audio from unopened BIN file.\n";
-        return;
-    }
+    // if( !_binFile.isOpen() )
+    // {
+    //     std::cout << "[CdDrive] Attempt to stream audio from unopened BIN file.\n";
+    //     return;
+    // }
 
     // 1. Recupera la traccia corrente per calcolare l'offset relativo al file binario
     const auto track = _map.getTrackAtSector(lba);
@@ -213,7 +227,8 @@ void CdDrive::streamAudioSector(size_t lba)
     size_t relativeSector = (lba - track->startSector) + track->localOffsetSector;
 
     Sector s(2352);
-    auto ok = _binFile.readSectorAt( relativeSector, s);
+    //auto ok = _binFile.readSectorAt( relativeSector, s);
+    auto ok = track->binFile->readSectorAt( relativeSector, s);
 
     if( ok == BinFile::ErrorCode::EndOfFile )
     {

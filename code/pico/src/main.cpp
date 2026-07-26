@@ -13,6 +13,8 @@
 #include "DeviceControllerGPIO.hpp"
 #endif
 
+#include "LedDebugger.hpp"
+
 
 // 1. Configurazione del blocco hardware SPI (SPI 0)
 static spi_t spis[] = {
@@ -40,7 +42,6 @@ static sd_card_t sd_cards[] = {
     }
 };
 
-// 3. I metodi di "getter" che il linker non trovava
 extern "C" size_t spi_get_num() { return sizeof(spis) / sizeof(spis[0]); }
 extern "C" spi_t *spi_get_by_num(size_t num) {
     if (num < spi_get_num()) return &spis[num];
@@ -63,6 +64,8 @@ int main()
 #else
     DeviceController* controller = new DeviceControllerGPIO;
 #endif
+
+    LedDebugger::instance().init();
 
 
     controller->init();

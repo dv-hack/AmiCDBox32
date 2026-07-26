@@ -44,6 +44,8 @@ add_executable(AmiCDBox32
     src/DeviceControllerUSB.hpp    
     src/DeviceController.hpp
     src/IAudioPlayer.hpp
+    src/LedDebugger.cpp
+    src/LedDebugger.hpp
     src/PwmBuzzerPlayer.cpp
     src/PwmBuzzerPlayer.hpp
     src/Sector.hpp

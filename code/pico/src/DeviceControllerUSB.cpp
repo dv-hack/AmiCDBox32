@@ -2,6 +2,8 @@
 //
 #include "DeviceControllerUSB.hpp"
 
+#include "LedDebugger.hpp"
+
 #include "bsp/board.h"
 #include "tusb_config.h"
 #include "tusb.h"
@@ -18,9 +20,26 @@ extern "C" {
 #ifndef SCSI_CMD_READ_TOC
 #define SCSI_CMD_READ_TOC 0x43
 #endif
+#ifndef SCSI_CMD_MODE_SENSE_6
+#define SCSI_CMD_MODE_SENSE_6 0x1A
+#endif
+#ifndef SCSI_CMD_MODE_SENSE_10
+#define SCSI_CMD_MODE_SENSE_10 0x5A
+#endif
+#ifndef SCSI_CMD_GET_CONFIGURATION
+#define SCSI_CMD_GET_CONFIGURATION 0x46
+#endif
+#ifndef SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL
+#define SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL 0x1E
+#endif
 
+//static constexpr int kBlockCount_DEBUG = 300000;    // Valore fittizio di test (es. ~600MB di CD)
+static constexpr int kBlockCount_DEBUG = 38037;    // Valore fittizio di test (es. ~60MB di CD)
+
+// ------------------------------------------------------------------------------------------------
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4])
 {
+    //setActivityLed(true);
     (void) lun; // Logical Unit Number (ignorato, ne abbiamo solo uno)
 
     const char vid[] = "AmiCDBox";
@@ -30,69 +49,67 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
     memcpy(vendor_id  , vid, strlen(vid));
     memcpy(product_id , pid, strlen(pid));
     memcpy(product_rev, rev, strlen(rev));
+    //setActivityLed(false);
 }
 
-// Callback invocata per ogni comando SCSI
+// ------------------------------------------------------------------------------------------------
+// Callback invocata per i comandi SCSI non standard o non gestiti da TinyUSB
 int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize)
 {
+    setErrorLed(false);
+    setActivityLed(false);
+
     void const* response_data = NULL;
     uint16_t response_len = 0;
     
-    // Il primo byte è SEMPRE l'Opcode del comando SCSI
     uint8_t command = scsi_cmd[0];
 
     switch (command)
     {
-        case SCSI_CMD_TEST_UNIT_READY: // 0x00
-            // Il PC chiede "Ci sei? Sei pronto?"
-            // Qui controllerai se una ISO è attualmente montata tramite la tua logica
-            // Se sì -> return 0 (Pronto). Se no -> imposta un errore "Medium Not Present".
-            response_len = 0; 
-            break;
-
-        case SCSI_CMD_READ_CAPACITY_10: // 0x25
-            // Il PC chiede quanti settori ci sono sul CD
-            // Devi rispondere con il numero di blocchi totali della ISO montata
-            // response_data = tua_funzione_get_capacity();
-            // response_len = 8;
-            break;
-
-        case SCSI_CMD_READ_10: // 0x28
-            // IL COMANDO RE. Il PC vuole leggere i dati veri e propri.
-            {
-                // Estraiamo il LBA (Logical Block Address) richiesto dai byte 2,3,4,5
-                uint32_t lba = (scsi_cmd[2] << 24) | (scsi_cmd[3] << 16) | 
-                               (scsi_cmd[4] <<  8) | (scsi_cmd[5]);
-                
-                // Estraiamo quanti blocchi vuole leggere (byte 7,8)
-                uint16_t block_count = (scsi_cmd[7] << 8) | scsi_cmd[8];
-
-                // Chiamata alla tua classe C++ che legge dalla SD Card
-                // cdDrive->readSectors(lba, block_count, buffer);
-                
-                response_len = block_count * 2048; // Standard CD-ROM sector size
-            }
-            break;
-
         case SCSI_CMD_READ_TOC: // 0x43
-            // Il PC vuole sapere la geometria del disco (Traccia 1 Dati, Traccia 2 Audio, ecc.)
-            // Qui passerai la CdMap generata dal parsing del file .cue
+        {
+            static uint8_t toc[20] = {
+                0x00, 0x12, 
+                0x01,       
+                0x01,       
+                0x00, 0x14, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x14, 0xAA, 0x00, 
+                (uint8_t)(kBlockCount_DEBUG >> 24), (uint8_t)(kBlockCount_DEBUG >> 16), 
+                (uint8_t)(kBlockCount_DEBUG >> 8),  (uint8_t)(kBlockCount_DEBUG & 0xFF) 
+            };
+            
+            response_data = toc;
+            response_len = sizeof(toc);
+            setActivityLed(true);
             break;
+        }
+
+        // Comandi di controllo comuni che Windows invia ai CD-ROM: li accettiamo silenziosamente
+        case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL: // 0x1E
+        case SCSI_CMD_MODE_SENSE_6:                 // 0x1A
+        case SCSI_CMD_MODE_SENSE_10:                // 0x5A
+        case SCSI_CMD_GET_CONFIGURATION:            // 0x46
+        {
+            response_len = 0; // Nessun dato o operazione riuscita
+            break;
+        }
 
         default:
-            // Comando non supportato: il PC (o l'Amiga) gestirà elegantemente il rifiuto
-            tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
+        {
+            // Per veri comandi sconosciuti, manteniamo il blocco ma senza accendere il LED fisso per i controlli standard
+            tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
+            //setErrorLed(true);
             return -1;
+        }
     }
 
-    // Se abbiamo dati da restituire (es. per la TOC o l'INQUIRY), li copiamo nel buffer
     if ( response_data && response_len > 0 )
     {
         if(bufsize < response_len) response_len = bufsize;
         memcpy(buffer, response_data, response_len);
     }
 
-    return response_len; // Restituisce i byte effettivamente elaborati/inviati
+    return response_len; 
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -109,28 +126,36 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun)
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
 {
     (void)lun;
-    *block_size = 2048;       // Standard CD-ROM sector size
-    *block_count = 300000;    // Valore fittizio di test (es. ~600MB di CD)
+    
+    if (gController) {
+        *block_count = gController->drive().disc().getTotalSectors();
+    } else {
+        *block_count = 0;
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
-// 3. Callback per la lettura dei settori (Qui poi collegherai il tuo CdDrive)
+// 3. Callback per la lettura dei settori
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
+    setErrorLed(false);
+    setActivityLed(true);
+
     (void)lun;
     (void)offset;
 
-    // Calcoliamo quanti settori ci sta chiedendo il PC (bufsize / 2048)
     uint16_t block_count = bufsize / 2048;
 
-    // Se non abbiamo l'istanza del drive o la lettura fallisce, restituiamo -1 (errore)
-    std::vector<uint8_t> data;
-    if (!gController || !gController->drive().readDataToBuffer(lba, block_count, data ))
+    if (!gController || !gController->drive().readDataToBuffer(lba, block_count, (uint8_t*)buffer))
+    {
+        //setActivityLed(false);
+        //setErrorLed(true);
         return -1;
+    }   
 
-    // WARN: doppia copia. FIX ME.
-    memcpy( buffer, &data[0], data.size());
-    return bufsize; // Lettura andata a buon fine!
+    setActivityLed(false);
+    setErrorLed(false);
+    return bufsize;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -160,7 +185,12 @@ void DeviceControllerUSB::init()
     board_init();
     tusb_init();
 
-    _drive.mount("AmigaOS3.2CD.iso");
+    _sdCard.mount();
+
+    //const auto mounted = _drive.mount("0:/Akira/Akira (Europe).cue");
+    const auto mounted = _drive.mount("0:/AmigaOS3.2CD.iso");
+
+    setReadyLed( mounted );
 }
 
 // ------------------------------------------------------------------------------------------------

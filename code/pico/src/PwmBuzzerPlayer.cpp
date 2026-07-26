@@ -84,9 +84,9 @@ void PwmBuzzerPlayer::feedSector(const Sector & sector)
     uint chan = pwm_gpio_to_channel(_dacPin);
     uint32_t* currentBuf = _sampleBuffer[_currentBuffer];
 
-    // 1. Processa i 2352 bytes nel buffer attualmente "libero"
+    // 1. Processa i bytes nel buffer attualmente "libero"
     int sampleIdx = 0;
-    for (int i = 0; i < sector.size; i += 4) // Sostituito kSectorSize con 2352 o usa la tua costante
+    for (int i = 0; i < sector.size; i += 4)
     {
         const int16_t left = static_cast<int16_t>(sector.bytes[i] | (sector.bytes[i + 1] << 8));
         const int16_t right = static_cast<int16_t>(sector.bytes[i + 2] | (sector.bytes[i + 3] << 8));

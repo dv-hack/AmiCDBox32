@@ -3,6 +3,7 @@
 #include "CdMap.hpp"
 
 #include "CueParser.hpp"
+#include "LedDebugger.hpp"
 
 #include "pico/stdlib.h"
 #include "ff.h"
@@ -16,7 +17,8 @@ CdMap buildCdMap( std::string_view filename )
     const size_t lastSlash = fullPath.find_last_of("/\\");
     
     auto rootFolder = fullPath.substr(0, lastSlash != std::string::npos ? lastSlash + 1 : 0);
-    if (rootFolder.empty()) rootFolder = "0:/";
+    if (rootFolder.empty())
+        rootFolder = "0:/";
     
     // Se è un file CUE, lo leggiamo e lo parsiamo
     if (filename.ends_with(".cue") || filename.ends_with(".CUE")) 
@@ -31,9 +33,7 @@ CdMap buildCdMap( std::string_view filename )
             
             // Legge il file a blocchi di 256 byte fino alla fine
             while (f_read(&file, buffer, sizeof(buffer), &bytesRead) == FR_OK && bytesRead > 0) 
-            {
                 content.append(buffer, bytesRead);
-            }
             f_close(&file);
             
             CdMap cdMap = CueParser::parse(rootFolder,content);
@@ -48,15 +48,35 @@ CdMap buildCdMap( std::string_view filename )
     } 
     else 
     {
-        // Se è un file ISO, creiamo una mappa fittizia con una singola traccia dati
         Track t;
         t.number = 1;
         t.type = TrackType::Data;
-        t.startSector = 0;
-        t.binFilename = rootFolder + std::string(filename);
+        t.startSector = 0; 
+        t.localOffsetSector = 0;
+        //t.fileHeaderOffset = 0;
+        t.binFile = new BinFile(rootFolder + std::string(filename) );
+        t.sectorSize = (filename.ends_with(".iso") || filename.ends_with(".ISO")) ? 2048 : 2352;
+        
+        // Chiediamo a FatFs quanto è grande il file per calcolare i settori totali
+        FILINFO fno;
+        size_t fileSectors = 0;
+        if (f_stat(fullPath.c_str(), &fno) == FR_OK) {
+            fileSectors = fno.fsize / t.sectorSize;
+        } else {
+            std::cout << "[System] Warning: Could not stat file " << fullPath << ".\n";
+            fileSectors = 10000; // Fallback di sicurezza
+        }
+
+        t.endSector = (fileSectors > 0) ? fileSectors - 1 : 0;        
 
         CdMap cdMap;
+        cdMap.rootFolder = rootFolder;
         cdMap.tracks.push_back(t);
         return cdMap;
     }
+}
+
+uint32_t CdMap::getTotalSectors() const
+{
+    
 }

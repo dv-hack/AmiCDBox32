@@ -7,7 +7,6 @@
 #include "CdMap.hpp"
 
 #include <sstream>
-#include <iostream>
 #include <charconv>
 #include <algorithm>
 
@@ -68,6 +67,7 @@ CdMap CueParser::parse(std::string_view rootFolder, std::string_view cueContent)
                     fileSectors = 10000; // Fallback di sicurezza in caso di errore di lettura hardware
                 }
                 
+                
                 currentTrack.endSector = currentTrack.startSector + (fileSectors - currentTrack.localOffsetSector) - 1;
                 absoluteLbaAccumulator = currentTrack.endSector + 1;
                 map.tracks.push_back(currentTrack);
@@ -87,8 +87,9 @@ CdMap CueParser::parse(std::string_view rootFolder, std::string_view cueContent)
             int trackNum = 0;
             std::from_chars(svLine.data() + 6, svLine.data() + 8, trackNum);
             currentTrack.number = trackNum;
-            currentTrack.binFilename = currentBinFile; // Assegna il file corrente alla traccia
+            currentTrack.binFile = new BinFile( currentBinFile ); // Assegna il file corrente alla traccia
             currentTrack.type = (svLine.ends_with("AUDIO")) ? TrackType::Audio : TrackType::Data;
+            currentTrack.sectorSize = 2352;
             currentTrack.startSector = absoluteLbaAccumulator; // L'LBA iniziale diventa l'accumulato globale
         }
         else if (svLine.starts_with("INDEX 01")) {

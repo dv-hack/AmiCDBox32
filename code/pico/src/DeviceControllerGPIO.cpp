@@ -34,6 +34,7 @@ void DeviceControllerGPIO::init()
     std::cout << "================================================\n";
 
     _drive = CdDrive( new PwmBuzzerPlayer(dacPin));
+    _sdCard.mount();
 }
 
 // ------------------------------------------------------------------------------------------------

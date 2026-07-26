@@ -30,7 +30,7 @@ public:
     bool mount(std::string_view filename);
     void eject();
     
-    bool readDataToBuffer( size_t lba, uint16_t blockCount, std::vector<uint8_t> &buffer );
+    bool readDataToBuffer( size_t lba, uint16_t blockCount, uint8_t* buffer );
     void play(size_t targetLba);
     void playTrack(int trackNumber);
     void stop();
@@ -39,6 +39,8 @@ public:
     DriveState       getState() const { return _state; }
     std::string_view getMountedFile() const { return _mountedFile; }
     size_t           getCurrentLba() const { return _currentLba; }
+
+    CdMap &disc() {return _map;}
 
     void tickAudio();
 
@@ -52,7 +54,6 @@ private:
     
     CdMap _map; // Table of Contents
     std::unique_ptr<IAudioPlayer> _audioPlayer;
-    BinFile _binFile;
     
     
     size_t _currentLba = 0;
