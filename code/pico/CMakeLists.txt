@@ -54,6 +54,7 @@ add_executable(AmiCDBox32
     src/tusb_config.h
     src/usb_descriptors.c
     src/Version.hpp
+    src/Track.hpp
 )
 
 target_include_directories(AmiCDBox32 BEFORE PRIVATE
