@@ -2,42 +2,61 @@
 //
 #pragma once
 
+#include "Disc.hpp"
+
 
 #include <string>
 #include <vector>
-#include <string_view>
-#include <memory>
+#include <cstdint>
 
-class Disc;
 class IAudioPlayer;
 
-enum class DriveState {
-    NoMedia,
-    Ready,
-    ReadingData,
-    PlayingAudio
-};
+namespace SCSI
+{
+    constexpr uint8_t TEST_UNIT_READY = 0x00;
+    constexpr uint8_t READ_CAPACITY   = 0x25;
+    constexpr uint8_t READ_10         = 0x28;
+    constexpr uint8_t READ_TOC        = 0x43;
+
+    enum class Status : uint8_t
+    {
+        Good           = 0x00,
+        CheckCondition = 0x02, // Errore o disco non presente
+        Busy           = 0x08
+    };
+}
 
 class CdDrive
 {
 public:
+    enum class State 
+    {
+        NoMedia,
+        Ready,
+        ReadingData,
+        PlayingAudio
+    };
+
+
+public:
     CdDrive() = default;
 
-    Disc *disc() { return _disc;}
+    Disc &disc() { return _disc;}
     void eject();
-    void insertDisc( Disc *d );
-    DriveState state() const { return _state; }
-    
+    void insertDisc( Disc d );
+    State state() const { return _state; }
+    bool isReady() const { return _state == State::Ready; }
+
     void startAudioPlayback(int trackNumber, IAudioPlayer *player);
     void stopAudioPlayback();
-    
-    bool readDataToBuffer( size_t lba, uint16_t count, uint8_t* buffer );
-    
+
+    SCSI::Status scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uint8_t* outBuffer, uint32_t& bytesTransferred);
+        
 private:
     void tickAudio();
 
 private:
-    DriveState _state{ DriveState::NoMedia };
-    Disc      *_disc { nullptr };
+    State         _state{ State::NoMedia };
+    Disc          _disc;
     IAudioPlayer *_audioPlayer;
 };

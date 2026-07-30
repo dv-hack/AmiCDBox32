@@ -1,11 +1,8 @@
-// IaudioPlayer.hpp
+// IAudioPlayer.hpp
 //
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-
-#include "Sector.hpp"
+//#include "Sector.hpp"
 
 class IAudioPlayer
 {
@@ -15,5 +12,5 @@ public:
     virtual void startPlayback() = 0;
     virtual void stopPlayback() = 0;
     
-    virtual void feedSector(const Sector &sector ) = 0;
+    //virtual void feedSector(const Sector &sector ) = 0;
 };
