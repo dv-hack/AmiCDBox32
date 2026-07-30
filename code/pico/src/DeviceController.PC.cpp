@@ -5,6 +5,7 @@
 #include "Disc.hpp"
 #include "Mounter.hpp"
 #include "Endianess.hpp"
+#include "ISO9660Parser.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -47,12 +48,10 @@ void DeviceControllerPC::updateLoop()
         std::string command;
         std::getline(std::cin, command);
 
-        if (command.starts_with("mount"))
-            cmd_mount(tokenize(command)[1]);
-        else if (command.starts_with("unmount"))
-            cmd_unmount();
-        else if (command.starts_with("read"))
-            cmd_read();
+        if (command.starts_with("mount"))         cmd_mount(tokenize(command)[1]);
+        else if (command.starts_with("unmount"))  cmd_unmount();
+        else if (command.starts_with("read"))     cmd_read();
+        else if (command.starts_with("dir"))      cmd_showContents();
         else if (command == "q")
             break;
 
@@ -206,4 +205,28 @@ void DeviceControllerPC::cmd_read()
     readCapacity();
     readTOC();
     read10();
+}
+
+
+void DeviceControllerPC::cmd_showContents()
+{
+    if (!_drive.isReady())
+    {
+        std::cout << "Read failed. no disc." << '\n';
+        return;
+    }
+
+    std::cout<< "\n------------------------------------------------\n";
+    std::cout<< "[" << Iso9660Parser::getVolumeName(_drive.disc() ) << "]";
+    std::cout<< "\n------------------------------------------------\n";
+
+
+    auto contents = Iso9660Parser::getRootDirectory(_drive.disc());
+    for( auto &item : contents )
+    {
+        if( item.isDirectory )
+            std::cout << item.name << "/" << '\n';
+        else
+            std::cout << "   " << item.name << "      " << item.size << " bytes\n";
+    }
 }

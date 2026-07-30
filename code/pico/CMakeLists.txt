@@ -116,6 +116,8 @@ else()
         src/DeviceController.hpp
         src/FileSystem.PC.cpp    
         src/FileSystem.hpp
+        src/ISO9660Parser.cpp
+        src/ISO9660Parser.hpp
 #        src/IAudioPlayer.hpp
         src/Mounter.cpp
         src/Mounter.hpp

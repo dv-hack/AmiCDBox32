@@ -16,6 +16,7 @@ private:
     void cmd_mount( const std::string &);
     void cmd_unmount();
     void cmd_read();
+    void cmd_showContents();
 
 
 private:
