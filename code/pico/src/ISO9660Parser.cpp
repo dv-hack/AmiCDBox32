@@ -2,16 +2,18 @@
 //
 #include "ISO9660Parser.hpp"
 
+#include "Endianess.hpp"
+
 #include <cstring>
 #include <iostream>
 
 // ------------------------------------------------------------------------------------------------
-std::string Iso9660Parser::getVolumeName(const Disc& disc)
+std::string Iso9660Parser::getVolumeName( Disc* disc)
 {
     uint8_t sector[ SectorSize::ISO ];
     
     // Leggiamo il Primary Volume Descriptor (LBA 16)
-    if (!disc.readSectors(16, 1, SectorSize::ISO, sector))
+    if (!disc->readSectors(16, 1, SectorSize::ISO, sector))
         return "";
 
     // Verifica che sia un PVD valido (Tipo 1, ID "CD001")
@@ -33,13 +35,13 @@ std::string Iso9660Parser::getVolumeName(const Disc& disc)
 }
 
 // ------------------------------------------------------------------------------------------------
-std::vector<IsoNode> Iso9660Parser::getRootDirectory(const Disc& disc)
+std::vector<IsoNode> Iso9660Parser::getRootDirectory(Disc* disc)
 {
     std::vector<IsoNode> files;
     uint8_t sector[SectorSize::ISO];
 
     // Leggiamo di nuovo il PVD per trovare la Root Directory
-    if (!disc.readSectors(16, 1, SectorSize::ISO, sector))
+    if (!disc->readSectors(16, 1, SectorSize::ISO, sector))
         return files;
     
     if (sector[0] != 1 || std::memcmp(&sector[1], "CD001", 5) != 0)
@@ -47,14 +49,14 @@ std::vector<IsoNode> Iso9660Parser::getRootDirectory(const Disc& disc)
 
     // Il record della Root Directory si trova all'offset 156.
     // L'LBA di partenza è a +2, la dimensione in byte è a +10
-    uint32_t rootLba = readLE32(&sector[158]);
-    uint32_t rootSize = readLE32(&sector[166]);
+    uint32_t rootLba = Endianess::readLE32(&sector[158]);
+    uint32_t rootSize = Endianess::readLE32(&sector[166]);
 
     // Calcoliamo quanti settori occupa la directory e li leggiamo tutti
     uint32_t sectorsToRead = (rootSize + SectorSize::ISO-1 ) / SectorSize::ISO;
     std::vector<uint8_t> dirData(sectorsToRead * SectorSize::ISO);
     
-    if (!disc.readSectors(rootLba, sectorsToRead, SectorSize::ISO, dirData.data()))
+    if (!disc->readSectors(rootLba, sectorsToRead, SectorSize::ISO, dirData.data()))
         return files;
 
     size_t offset = 0;
@@ -70,8 +72,8 @@ std::vector<IsoNode> Iso9660Parser::getRootDirectory(const Disc& disc)
             continue;
         }
 
-        uint32_t fileLba  = readLE32(&dirData[offset + 2]);
-        uint32_t fileSize = readLE32(&dirData[offset + 10]);
+        uint32_t fileLba  = Endianess::readLE32(&dirData[offset + 2]);
+        uint32_t fileSize = Endianess::readLE32(&dirData[offset + 10]);
         bool isDir        = (dirData[offset + 25] & 0x02) != 0; // Bit 1 = Directory flag
         uint8_t nameLen   = dirData[offset + 32];
         

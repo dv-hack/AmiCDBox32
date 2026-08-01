@@ -41,9 +41,9 @@ public:
 public:
     CdDrive() = default;
 
-    Disc &disc() { return _disc;}
-    void eject();
-    void insertDisc( Disc d );
+    Disc *disc() { return _disc;}
+    Disc *eject();
+    void insertDisc( Disc *d );
     State state() const { return _state; }
     bool isReady() const { return _state == State::Ready; }
 
@@ -57,6 +57,6 @@ private:
 
 private:
     State         _state{ State::NoMedia };
-    Disc          _disc;
+    Disc         *_disc;
     IAudioPlayer *_audioPlayer;
 };

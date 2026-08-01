@@ -13,17 +13,19 @@
 
 
 // ------------------------------------------------------------------------------------------------
-void CdDrive::insertDisc( Disc d )
+void CdDrive::insertDisc( Disc *d )
 {
-    _disc = std::move( d );
-    _state = _disc.isEmpty() ? State::NoMedia : State::Ready;
+    _disc = d;
+    _state = _disc->isEmpty() ? State::NoMedia : State::Ready;
 }
 
 // ------------------------------------------------------------------------------------------------
-void CdDrive::eject()
+Disc *CdDrive::eject()
 {
-    _disc = {};
+    Disc *disc = _disc;
+    _disc = nullptr;
     _state = State::NoMedia;
+    return disc;
 }
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -61,9 +63,8 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
 {
     bytesTransferred = 0;
 
-    if (!isReady()) {
+    if (!isReady())
         return SCSI::Status::CheckCondition; // Media Not Present
-    }
 
     const uint8_t opcode = cdb[0];
 
@@ -74,7 +75,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
 
         case SCSI::READ_CAPACITY:
         {
-            uint32_t totalSectors = _disc.totalSectors();
+            uint32_t totalSectors = _disc->totalSectors();
             uint32_t lastLba = (totalSectors > 0) ? (totalSectors - 1) : 0;
 
             // Scrittura pulita dei dati in Big-Endian per il bus SCSI
@@ -94,7 +95,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
             if (sectorCount == 0)
                 return SCSI::Status::Good;
 
-            if (_disc.readSectors(lba, sectorCount, SectorSize::ISO, outBuffer))
+            if (_disc->readSectors(lba, sectorCount, SectorSize::ISO, outBuffer))
             {
                 bytesTransferred = sectorCount * SectorSize::ISO;
                 return SCSI::Status::Good;
@@ -108,7 +109,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
             uint8_t startTrackReq = cdb[6];   // Traccia da cui iniziare a elencare
             uint16_t allocLen = Endianess::readBE16(&cdb[7]);
 
-            const size_t trackCount = _disc.trackCount();
+            const size_t trackCount = _disc->trackCount();
             const uint8_t firstTrack = 1;
             const uint8_t lastTrack = static_cast<uint8_t>(trackCount);
 
@@ -135,7 +136,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
             // 1. Aggiungiamo i descrittori per ciascuna traccia reale
             for (size_t i = 0; i < trackCount; ++i)
             {
-                const Track& track = _disc.track(i);
+                const Track& track = _disc->track(i);
 
                 if (track.number() < startTrackReq && startTrackReq != 0xAA)
                     continue;
@@ -160,13 +161,13 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
             }
 
             // 2. Aggiungiamo il descrittore obbligatorio di Lead-Out (Traccia 0xAA)
-            const Track& lastTrackObj = _disc.track(trackCount - 1);
+            const Track& lastTrackObj = _disc->track(trackCount - 1);
             tocBuffer[offset + 0] = 0;
             tocBuffer[offset + 1] = trackControlFlag(lastTrackObj);
             tocBuffer[offset + 2] = 0xAA; // 0xAA identifica la Lead-Out in SCSI
             tocBuffer[offset + 3] = 0;
 
-            uint32_t leadOutLba = _disc.totalSectors();
+            uint32_t leadOutLba = _disc->totalSectors();
             if (msf)
             {
                 uint8_t m, s, f;

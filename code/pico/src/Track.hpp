@@ -12,6 +12,8 @@ public:
     enum class Type { Data, Audio };
 
     static Track makeISOTrack( const std::string &filename );
+    // static Track makeAudioTrack( const std::string &filename );
+    // static Track makeRawTrack( const std::string &filename );
 
 public:
     Track() = default;
@@ -34,4 +36,7 @@ private:
 
     FileSystem::File _file;
 
+
+    friend class Disc;
+    friend class VirtualNavDisc;
 };

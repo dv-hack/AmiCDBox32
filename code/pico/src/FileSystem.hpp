@@ -82,6 +82,9 @@ public:
     bool isOpen() const;
     void close();
     bool readNext(FileInfo& outInfo);
+
+    bool hasNext() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> _impl;

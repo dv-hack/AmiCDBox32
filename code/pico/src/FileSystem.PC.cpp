@@ -124,6 +124,11 @@ namespace FileSystem
         _impl.reset();
     }
 
+    bool Dir::hasNext() const
+    {
+        return isOpen() && _impl->iterator != _impl->end;
+    }
+
     bool Dir::readNext(FileInfo &outInfo)
     {
         if (!isOpen() || _impl->iterator == _impl->end)

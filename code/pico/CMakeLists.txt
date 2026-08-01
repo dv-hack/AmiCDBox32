@@ -124,6 +124,9 @@ else()
         src/Version.hpp
         src/Track.cpp
         src/Track.hpp
+        src/Endianess.hpp
+        src/VirtualNavDisc.cpp
+        src/VirtualNavDisc.hpp
     )
 
     target_compile_definitions(AmiCDBox32 PRIVATE TARGET_HOST=1)

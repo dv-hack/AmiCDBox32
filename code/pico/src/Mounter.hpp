@@ -10,6 +10,6 @@ class Disc;
 class Mounter
 {
 public:
-    static Disc mount( const std::string &filename );
+    static Disc *mount( const std::string &filename );
 
 };

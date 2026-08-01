@@ -13,8 +13,9 @@ class Disc
 {
 public:
     Disc() = default;
+    virtual ~Disc() = default;
 
-    bool     readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer) const;
+    virtual bool     readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer) const;
     uint32_t totalSectors() const;
 
     bool         isEmpty()         const  { return _tracks.empty(); }
@@ -22,7 +23,7 @@ public:
     Track&       track(uint32_t i)        { return _tracks[i];}
     const Track& track(uint32_t i) const  { return _tracks[i];}
 
-private:
+protected:
     std::vector<Track> _tracks;
 
     friend class Mounter;

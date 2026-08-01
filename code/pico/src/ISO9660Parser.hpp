@@ -17,11 +17,7 @@ struct IsoNode
 class Iso9660Parser
 {
 public:
-    static std::string getVolumeName(const Disc& disc);
-    static std::vector<IsoNode> getRootDirectory(const Disc& disc);
+    static std::string getVolumeName(Disc* disc);
+    static std::vector<IsoNode> getRootDirectory(Disc* disc);
 
-private:
-    static uint32_t readLE32(const uint8_t* data) {
-        return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
-    }
 };

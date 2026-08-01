@@ -6,6 +6,7 @@
 #include "Mounter.hpp"
 #include "Endianess.hpp"
 #include "ISO9660Parser.hpp"
+#include "VirtualNavDisc.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -31,6 +32,7 @@ static inline std::vector<std::string> tokenize(const std::string &s)
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerPC::init()
 {
+    _drive.insertDisc( new VirtualNavDisc( FileSystem::Path("."), "SD_NAVIGATOR" ) );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -64,14 +66,17 @@ void DeviceControllerPC::cmd_mount(const std::string &filename)
 {
     std::cout << "Mounting " << filename << "...\n";
 
-    Disc disc = Mounter::mount(filename);
-    _drive.insertDisc(std::move(disc));
+    auto disc = Mounter::mount(filename);
+    _drive.insertDisc(disc);
 }
 
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerPC::cmd_unmount()
 {
-    _drive.eject();
+    auto disc = _drive.eject();
+    delete disc;
+
+    _drive.insertDisc( new VirtualNavDisc( FileSystem::Path("."), "SD_NAVIGATOR" ) );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -207,7 +212,7 @@ void DeviceControllerPC::cmd_read()
     read10();
 }
 
-
+// ------------------------------------------------------------------------------------------------
 void DeviceControllerPC::cmd_showContents()
 {
     if (!_drive.isReady())
@@ -227,6 +232,6 @@ void DeviceControllerPC::cmd_showContents()
         if( item.isDirectory )
             std::cout << item.name << "/" << '\n';
         else
-            std::cout << "   " << item.name << "      " << item.size << " bytes\n";
+            std::cout << "   " << item.name << "\t\t\t\t\t" << item.size << " bytes\n";
     }
 }
