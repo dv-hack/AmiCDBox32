@@ -21,6 +21,12 @@ namespace FileSystem
         fs::directory_iterator end;
     };
 
+    bool init()
+    {
+        // For PC, no special initialization is needed.
+        return true;
+    }
+
     // ============================================================================
     // Path
     // ============================================================================

@@ -2,6 +2,8 @@
 //
 #include "Track.hpp"
 
+#include "Sector.hpp"
+
 #include <iostream>
 
 // ------------------------------------------------------------------------------------------------
@@ -16,7 +18,7 @@ Track Track::makeISOTrack( const std::string &filename )
 
     // compute sectors. iso files have 2048bytes sectors
     const uint32_t fileSize = FileSystem::stat( filename ).size;
-    const uint32_t sectorSize = static_cast<uint32_t>( SectorSize::ISO);
+    const uint32_t sectorSize = SectorSize::ISO;
     const uint32_t sectorCount = fileSize / sectorSize;
 
     if (fileSize % sectorSize != 0) // not multiple of 2048
@@ -45,7 +47,7 @@ bool Track::readData(uint32_t relLBA, uint8_t *outBuffer)
         return false;
     }
 
-    if (_sectorSize == 2048)
+    if (_sectorSize == SectorSize::ISO )
     {
         uint32_t bytes{0};
         const auto readOk = _file.read(outBuffer, _sectorSize, bytes);

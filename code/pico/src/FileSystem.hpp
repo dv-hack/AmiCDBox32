@@ -90,6 +90,7 @@ private:
 };
 
 // ------------------------------------------------------------------------------------------------
+bool     init();
 File     open(const std::string& filename);
 Dir      openDir(const std::string& path);
 FileInfo stat(const std::string& filename);

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 project(AmiCDBox32Project C CXX ASM)
 
-# Definiamo l'opzione (di default è ON, quindi compila per Pico)
 option(BUILD_FOR_PICO "Build with toolchain for Raspberry Pi Pico" OFF)
 
 set(CMAKE_C_STANDARD 11)
@@ -66,7 +65,6 @@ if (BUILD_FOR_PICO)
         src/Track.hpp
 )
 
-    # Definiamo una macro per usare gli #ifdef nel codice (se necessario)
     target_compile_definitions(AmiCDBox32 PRIVATE TARGET_PICO=1)
 
     target_include_directories(AmiCDBox32 BEFORE PRIVATE
@@ -89,7 +87,6 @@ if (BUILD_FOR_PICO)
     pico_set_program_name(AmiCDBox32 "AmiCDBox32")
     pico_set_program_version(AmiCDBox32 "0.3.0")
 
-    # Enable USB serial output (instead of hardware UART)
     pico_enable_stdio_usb(AmiCDBox32 0)
     pico_enable_stdio_uart(AmiCDBox32 0)
 
@@ -121,7 +118,7 @@ else()
 #        src/IAudioPlayer.hpp
         src/Mounter.cpp
         src/Mounter.hpp
-#        src/Sector.hpp
+        src/Sector.hpp
 #        src/SDCardHandler.cpp
 #        src/SDCardHandler.hpp
         src/Version.hpp

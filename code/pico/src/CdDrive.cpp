@@ -69,31 +69,34 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uin
 
     switch (opcode) 
     {
-        case SCSI::TEST_UNIT_READY: {
+        case SCSI::TEST_UNIT_READY:
             return SCSI::Status::Good;
-        }
 
-        case SCSI::READ_CAPACITY: {
+        case SCSI::READ_CAPACITY:
+        {
             uint32_t totalSectors = _disc.totalSectors();
             uint32_t lastLba = (totalSectors > 0) ? (totalSectors - 1) : 0;
 
             // Scrittura pulita dei dati in Big-Endian per il bus SCSI
             Endianess::writeBE32(&outBuffer[0], lastLba);
-            Endianess::writeBE32(&outBuffer[4], 2048); // Block size standard CD
+            Endianess::writeBE32(&outBuffer[4], SectorSize::ISO ); // Block size standard CD
 
             bytesTransferred = 8;
             return SCSI::Status::Good;
         }
 
-        case SCSI::READ_10: {
+        case SCSI::READ_10:
+        {
             // Estrazione LBA e conteggio settori tramite utility
             uint32_t lba = Endianess::readBE32(&cdb[2]);
             uint16_t sectorCount = Endianess::readBE16(&cdb[7]);
 
-            if (sectorCount == 0) return SCSI::Status::Good;
+            if (sectorCount == 0)
+                return SCSI::Status::Good;
 
-            if (_disc.readSectors(lba, sectorCount, outBuffer)) {
-                bytesTransferred = sectorCount * 2048;
+            if (_disc.readSectors(lba, sectorCount, SectorSize::ISO, outBuffer))
+            {
+                bytesTransferred = sectorCount * SectorSize::ISO;
                 return SCSI::Status::Good;
             }
             return SCSI::Status::CheckCondition;

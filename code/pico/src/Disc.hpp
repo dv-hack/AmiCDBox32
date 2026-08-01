@@ -3,16 +3,18 @@
 #pragma once
 
 #include "Track.hpp"
+#include "Sector.hpp"
 
 #include <vector>
 #include <string>
+
 
 class Disc
 {
 public:
     Disc() = default;
 
-    bool     readSectors(uint32_t lba, uint16_t blockCount, uint8_t* buffer) const;
+    bool     readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer) const;
     uint32_t totalSectors() const;
 
     bool         isEmpty()         const  { return _tracks.empty(); }
@@ -24,5 +26,4 @@ private:
     std::vector<Track> _tracks;
 
     friend class Mounter;
-
 };

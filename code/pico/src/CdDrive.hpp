@@ -21,7 +21,7 @@ namespace SCSI
     enum class Status : uint8_t
     {
         Good           = 0x00,
-        CheckCondition = 0x02, // Errore o disco non presente
+        CheckCondition = 0x02, // Error or no disc
         Busy           = 0x08
     };
 }

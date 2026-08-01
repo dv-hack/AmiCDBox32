@@ -10,21 +10,11 @@ class Track
 {
 public:
     enum class Type { Data, Audio };
-    enum class SectorSize { ISO = 2048, RAW = 2352 };
 
     static Track makeISOTrack( const std::string &filename );
 
 public:
     Track() = default;
-    // Track(uint8_t num, uint32_t startLBA, uint32_t sectorCount, uint16_t sectorSize, Type t, FileSystem::File f)
-    //     : _number(num)
-    //     , _startLBA(startLBA)
-    //     , _sectorCount(sectorCount)
-    //     , _sectorSize(sectorSize)
-    //     , _type(t)
-    //     , _file( std::move(f) )
-    // {}
-
 
     uint8_t   number()      const { return _number; }
     uint32_t  startLBA()    const { return _startLBA; }
