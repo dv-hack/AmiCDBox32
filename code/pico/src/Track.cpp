@@ -39,7 +39,7 @@ Track Track::makeISOTrack( const std::string &filename )
 // ------------------------------------------------------------------------------------------------
 bool Track::readData(uint32_t relLBA, uint8_t *outBuffer)
 {
-    const auto offset = relLBA * _sectorSize;
+    const auto offset = (relLBA + _fileSectorOffset) * _sectorSize;
     const auto ok = _file.seek(offset);
     if (ok != FileSystem::ErrorCode::NoError)
     {
@@ -59,9 +59,26 @@ bool Track::readData(uint32_t relLBA, uint8_t *outBuffer)
         return true;
     }
 
-    // 1. Calcola l'offset nel file: relLba * sectorSize
-    // 2. Esegui la seek(offset)
-    // 3. Se sectorSize == 2048 -> f_read direttamente in outBuffer
-    // 4. Se sectorSize == 2352 (Dati) -> f_read in un buffer temporaneo, copia i byte da [16] a [2063] in outBuffer
+    if( _sectorSize == SectorSize::RAW )
+    {
+        uint8_t tempBuffer[SectorSize::RAW];
+        uint32_t bytes{0};
+        const auto readOk = _file.read(tempBuffer, _sectorSize, bytes);
+        if (readOk != FileSystem::ErrorCode::NoError || bytes != _sectorSize)
+        {
+            std::cout << "[Track] Error: read error. ErrorCode: " << static_cast<int>(readOk) << " bytes: " << bytes << '\n';
+            return false;
+        }
+
+        if     (_type == Type::Audio) std::copy(tempBuffer, tempBuffer + 2352, outBuffer);              // Copy the audio portion (2352 bytes) to outBuffer
+        else if(_type == Type::Data)  std::copy(tempBuffer + 16, tempBuffer + 16 + 2048, outBuffer);   // Copy the data portion (2048 bytes) to outBuffer
+        else
+        {
+            std::cout << "[Track] Error: unknown track type.\n";
+            return false;
+        }
+        return true;
+    }
+
     return false;
 }

@@ -2,23 +2,21 @@
 //
 #include "CueParser.hpp"
 
-#include "ff.h"
-
-#include "CdMap.hpp"
+#include "Sector.hpp"
+#include "Track.hpp"
+#include "FileSystem.hpp"
 
 #include <sstream>
 #include <charconv>
 #include <algorithm>
+#include <iostream>
 
-// ------------------------------------------------------------------------------------------------
-// converts minutes, seconds and frames to LBA
+// Riportato in vita dal blocco #if 0
 static inline size_t msfToLBA(std::string_view msfStr)
 {
-    if (msfStr.size() < 8)
-        return 0;
+    if (msfStr.size() < 8) return 0;
 
     int minutes = 0, seconds = 0, frames = 0;
-
     std::from_chars(msfStr.data(), msfStr.data() + 2, minutes);
     std::from_chars(msfStr.data() + 3, msfStr.data() + 5, seconds);
     std::from_chars(msfStr.data() + 6, msfStr.data() + 8, frames);
@@ -26,94 +24,96 @@ static inline size_t msfToLBA(std::string_view msfStr)
     return (minutes * 60 * 75) + (seconds * 75) + frames;
 }
 
-// ------------------------------------------------------------------------------------------------
-Disc CueParser::parse(std::string_view rootFolder, std::string_view cueContent)
+std::vector<Track> CueParser::parse(const std::string &cueFile)
 {
-    Disc map;
-    map.rootFolder = std::string(rootFolder);
-    
-    std::string line;
-    std::istringstream stream{std::string(cueContent)};
+    if (!FileSystem::exists(cueFile))
+    {
+        std::cout << "CUE file not found: " << cueFile << "\n";
+        return {};
+    }
 
+    std::string cueContent;
+    {
+        FileSystem::File cueFileHandle = FileSystem::open(cueFile);
+        // Assicurati che cueContent abbia la dimensione corretta prima di scriverci dentro!
+        cueContent.resize(cueFileHandle.getSize());
+        cueFileHandle.readAll(reinterpret_cast<uint8_t *>(cueContent.data()), cueFileHandle.getSize());
+    }
+
+    const FileSystem::FileInfo cueFileInfo = FileSystem::stat(cueFile);
+    const std::string rootFolder = cueFile.substr(0, cueFile.size() - cueFileInfo.name.size());
+
+    std::vector<Track> tracks;
     Track currentTrack;
     std::string currentBinFile = "";
     bool hasTrack = false;
     size_t absoluteLbaAccumulator = 0;
 
-    while (std::getline(stream, line)) {
+    // Catturiamo tutto per riferimento per operare su currentTrack
+    auto handleTrackEntry = [&]()
+    {
+        if (!hasTrack) return;
+        
+        FileSystem::FileInfo fno = FileSystem::stat(rootFolder + currentBinFile);
+        const size_t fileSectors = fno.size > 0 ? (fno.size / SectorSize::RAW) : 10000;
+
+        // Calcoliamo la quantità di settori spettanti a questa traccia
+        currentTrack._sectorCount = fileSectors - currentTrack._fileSectorOffset;
+        
+        // Prepariamo l'LBA di partenza per un'eventuale traccia successiva
+        absoluteLbaAccumulator += currentTrack._sectorCount;
+        
+        tracks.push_back(std::move(currentTrack)); // Move, così spostiamo il file handle in modo sicuro
+        hasTrack = false;
+    };
+
+    std::string line;
+    std::istringstream stream{cueContent};
+
+    while (std::getline(stream, line))
+    {
         std::string_view svLine(line);
-    
-        // 1. Rimuove gli spazi e i ritorni a capo iniziali
         size_t firstNonSpace = svLine.find_first_not_of(" \t\r\n");
         if (firstNonSpace == std::string_view::npos) continue;
+
         svLine = svLine.substr(firstNonSpace);
-
-        // 2. CORREZIONE: Rimuove gli spazi e i caratteri \r finali
         size_t lastNonSpace = svLine.find_last_not_of(" \t\r\n");
-        if (lastNonSpace != std::string_view::npos) {
-            svLine = svLine.substr(0, lastNonSpace + 1);
-        }
+        if (lastNonSpace != std::string_view::npos) svLine = svLine.substr(0, lastNonSpace + 1);
 
-        if (svLine.starts_with("FILE")) {
-            // Se avevamo già una traccia attiva prima di cambiare FILE, dobbiamo calcolarne la fine
-            if (hasTrack) {
-                FILINFO fno;
-                std::string fullPath = map.rootFolder + currentBinFile;
-                size_t fileSectors = 0;
-                
-                if (f_stat(fullPath.c_str(), &fno) == FR_OK) {
-                    fileSectors = fno.fsize / 2352; // Settori grezzi standard CD-ROM
-                } else {
-                    fileSectors = 10000; // Fallback di sicurezza in caso di errore di lettura hardware
-                }
-                
-                
-                currentTrack.endSector = currentTrack.startSector + (fileSectors - currentTrack.localOffsetSector) - 1;
-                absoluteLbaAccumulator = currentTrack.endSector + 1;
-                map.tracks.push_back(currentTrack);
-                hasTrack = false;
-            }
+        if (svLine.starts_with("FILE"))
+        {
+            handleTrackEntry();
 
             size_t firstQuote = svLine.find('"');
             size_t lastQuote = svLine.rfind('"');
-            if (firstQuote != std::string_view::npos && lastQuote != std::string_view::npos) {
+            if (firstQuote != std::string_view::npos && lastQuote != std::string_view::npos)
                 currentBinFile = std::string(svLine.substr(firstQuote + 1, lastQuote - firstQuote - 1));
-            }
         }
-        else if (svLine.starts_with("TRACK")) {
+        else if (svLine.starts_with("TRACK"))
+        {
             currentTrack = Track();
             hasTrack = true;
-            
+
             int trackNum = 0;
             std::from_chars(svLine.data() + 6, svLine.data() + 8, trackNum);
-            currentTrack.number = trackNum;
-            currentTrack.binFile = new BinFile( currentBinFile ); // Assegna il file corrente alla traccia
-            currentTrack.type = (svLine.ends_with("AUDIO")) ? TrackType::Audio : TrackType::Data;
-            currentTrack.sectorSize = 2352;
-            currentTrack.startSector = absoluteLbaAccumulator; // L'LBA iniziale diventa l'accumulato globale
+            currentTrack._number     = trackNum;
+            currentTrack._file       = FileSystem::open(rootFolder + currentBinFile);
+            currentTrack._type       = (svLine.ends_with("AUDIO")) ? Track::Type::Audio : Track::Type::Data;
+            currentTrack._sectorSize = SectorSize::RAW;
+            currentTrack._startLBA   = absoluteLbaAccumulator;
         }
-        else if (svLine.starts_with("INDEX 01")) {
+        else if (svLine.starts_with("INDEX 01"))
+        {
             size_t lastSpace = svLine.rfind(' ');
-            if (lastSpace != std::string_view::npos) {
+            if (lastSpace != std::string_view::npos)
+            {
                 std::string_view msf = svLine.substr(lastSpace + 1);
-                currentTrack.localOffsetSector = msfToLBA(msf);
+                currentTrack._fileSectorOffset = msfToLBA(msf);
             }
         }
     }
 
-    // Gestione dell'ultima traccia rimasta fuori dal ciclo di cambio FILE
-    if (hasTrack) {
-        FILINFO fno;
-        std::string fullPath = map.rootFolder + currentBinFile;
-        size_t fileSectors = 0;
-        if (f_stat(fullPath.c_str(), &fno) == FR_OK) {
-            fileSectors = fno.fsize / 2352;
-        } else {
-            fileSectors = 20000;
-        }
-        currentTrack.endSector = currentTrack.startSector + (fileSectors - currentTrack.localOffsetSector) - 1;
-        map.tracks.push_back(currentTrack);
-    }
+    handleTrackEntry(); // Non dimentichiamo di chiudere e pushare l'ultima traccia!
 
-    return map;
+    return tracks;
 }

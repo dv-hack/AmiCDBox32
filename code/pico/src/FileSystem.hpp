@@ -58,6 +58,7 @@ public:
     uint32_t getSize() const;
     
     ErrorCode read(uint8_t* buffer, uint32_t sizeToRead, uint32_t& bytesRead);
+    ErrorCode readAll(uint8_t* buffer, uint32_t sizeToRead);
     ErrorCode seek(uint32_t offset);
 
 private:

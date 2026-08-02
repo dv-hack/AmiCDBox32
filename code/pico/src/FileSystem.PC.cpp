@@ -93,6 +93,24 @@ namespace FileSystem
         return ErrorCode::NoError;
     }
 
+    ErrorCode File::readAll(uint8_t *buffer, uint32_t sizeToRead)
+    {
+        if (!isOpen())
+            return ErrorCode::FileOperationError;
+
+        _impl->stream.read(reinterpret_cast<char *>(buffer), sizeToRead);
+        uint32_t bytesRead = static_cast<uint32_t>(_impl->stream.gcount());
+
+        if (bytesRead < sizeToRead)
+        {
+            if (_impl->stream.eof())
+                return ErrorCode::EndOfFile;
+            return ErrorCode::FileOperationError;
+        }
+
+        return ErrorCode::NoError;
+    }
+
     ErrorCode File::seek(uint32_t offset)
     {
         if (!isOpen())

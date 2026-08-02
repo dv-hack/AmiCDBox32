@@ -2,14 +2,13 @@
 //
 #pragma once
 
-#include <string_view>
+#include <string>
+#include <vector>
 
-class Disc;
+class Track;
 
 class CueParser
 {
 public:
-    static Disc parse( std::string_view rootFolder, std::string_view cueContent);
-
-private:
+    static std::vector<Track> parse( const std::string &cueFile );
 };

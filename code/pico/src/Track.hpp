@@ -32,11 +32,12 @@ private:
     uint32_t  _startLBA   {0};
     uint32_t  _sectorCount{0};
     uint16_t  _sectorSize {0}; // 2048 (ISO), 2352 (BIN/RAW)
+    uint32_t  _fileSectorOffset{0};
     Type      _type { Type::Data};
 
     FileSystem::File _file;
 
-
     friend class Disc;
     friend class VirtualNavDisc;
+    friend class CueParser;
 };

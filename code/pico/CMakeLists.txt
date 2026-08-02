@@ -105,17 +105,17 @@ else()
         src/CdDrive.hpp
         src/Disc.cpp
         src/Disc.hpp
-#        src/CueParser.cpp
-#        src/CueParser.hpp
+        src/CueParser.cpp
+        src/CueParser.hpp
         src/DeviceController.PC.cpp
         src/DeviceController.PC.hpp
-        src/DeviceController.hpp    
         src/DeviceController.hpp
-        src/FileSystem.PC.cpp    
+        src/Endianess.hpp
+        src/FileSystem.PC.cpp 
         src/FileSystem.hpp
         src/ISO9660Parser.cpp
         src/ISO9660Parser.hpp
-#        src/IAudioPlayer.hpp
+        src/IAudioPlayer.hpp
         src/Mounter.cpp
         src/Mounter.hpp
         src/Sector.hpp
@@ -124,7 +124,6 @@ else()
         src/Version.hpp
         src/Track.cpp
         src/Track.hpp
-        src/Endianess.hpp
         src/VirtualNavDisc.cpp
         src/VirtualNavDisc.hpp
     )
