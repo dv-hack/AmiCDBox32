@@ -31,6 +31,7 @@
 
 // Configurazione buffer per MSC (2048 byte = 1 settore CD-ROM standard)
 #define CFG_TUD_MSC_EP_BUFSIZE      2048
+#define CFG_TUD_MSC_DEVICE_TYPE 0x05
 
 #ifdef __cplusplus
  }

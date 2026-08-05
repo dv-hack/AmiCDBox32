@@ -1,13 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
-project(AmiCDBox32Project C CXX ASM)
 
-option(BUILD_FOR_PICO "Build with toolchain for Raspberry Pi Pico" OFF)
-
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-
+option(BUILD_FOR_PICO "Build with toolchain for Raspberry Pi Pico" ON)
 
 if (BUILD_FOR_PICO)
     message(STATUS "Configuring toolchain for RASPBERRY PI PICO...")
@@ -29,46 +22,58 @@ if (BUILD_FOR_PICO)
 
     # Initialize the SDK using the clean path
     include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+
+    project(AmiCDBox32Project C CXX ASM)
+    set(CMAKE_C_STANDARD 11)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
     
     pico_sdk_init()
 
     add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/FatFS_SPI)
     
     add_executable(AmiCDBox32
-        src/main.PICO.cpp
-        src/AudioPlayer.cpp
-        src/AudioPlayer.hpp
-        src/BinFile.cpp
-        src/BinFile.hpp
+        src/pico/main.PICO.cpp
+        src/pico/AudioPlayer.cpp
+        src/pico/AudioPlayer.hpp
+#        src/pico/DeviceControllerGPIO.cpp
+#        src/pico/DeviceControllerGPIO.hpp
+        src/pico/DeviceControllerUSB.cpp
+        src/pico/DeviceControllerUSB.hpp
+        src/pico/FileSystem.PICO.cpp
+        src/pico/LedDebugger.cpp
+        src/pico/LedDebugger.hpp
+        #        src/pico/PwmBuzzerPlayer.cpp
+        #        src/pico/PwmBuzzerPlayer.hpp
+        src/pico/SDCardHandler.cpp
+        src/pico/SDCardHandler.hpp
+        src/pico/tusb_config.h
+        src/pico/usb_descriptors.c
         src/CdDrive.cpp
         src/CdDrive.hpp
-        src/CdMap.cpp
-        src/CdMap.hpp
+        src/Disc.cpp
+        src/Disc.hpp
         src/CueParser.cpp
         src/CueParser.hpp
-        src/DeviceControllerGPIO.cpp
-        src/DeviceControllerGPIO.hpp
-        src/DeviceControllerUSB.cpp
-        src/DeviceControllerUSB.hpp    
         src/DeviceController.hpp
+        src/Endianess.hpp
+        src/FileSystem.hpp
         src/IAudioPlayer.hpp
-        src/LedDebugger.cpp
-        src/LedDebugger.hpp
-        src/PwmBuzzerPlayer.cpp
-        src/PwmBuzzerPlayer.hpp
+        src/Mounter.cpp
+        src/Mounter.hpp
         src/Sector.hpp
-        src/SDCardHandler.cpp
-        src/SDCardHandler.hpp
-        src/tusb_config.h
-        src/usb_descriptors.c
         src/Version.hpp
+        src/Track.cpp
         src/Track.hpp
-)
+        src/VirtualNavDisc.cpp
+        src/VirtualNavDisc.hpp
+    )
 
     target_compile_definitions(AmiCDBox32 PRIVATE TARGET_PICO=1)
 
     target_include_directories(AmiCDBox32 BEFORE PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
+        ${CMAKE_CURRENT_LIST_DIR}/src/pico
     )
 
     # Set C++20 standard requirements
@@ -94,9 +99,19 @@ if (BUILD_FOR_PICO)
     pico_add_extra_outputs(AmiCDBox32)
 else()
     message(STATUS "Configuring toolchain for PC Build...")
+
+    project(AmiCDBox32Project C CXX ASM)
+    set(CMAKE_C_STANDARD 11)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)    
         
     add_executable(AmiCDBox32
-        src/main.PC.cpp
+        src/pc/main.PC.cpp
+        src/pc/FileSystem.PC.cpp 
+        src/pc/ISO9660Parser.cpp
+        src/pc/ISO9660Parser.hpp
+        src/pc/DeviceController.PC.cpp
+        src/pc/_DeviceController.PC.hpp
 #        src/AudioPlayer.cpp
 #        src/AudioPlayer.hpp
 #        src/BinFile.cpp
@@ -107,14 +122,9 @@ else()
         src/Disc.hpp
         src/CueParser.cpp
         src/CueParser.hpp
-        src/DeviceController.PC.cpp
-        src/DeviceController.PC.hpp
         src/DeviceController.hpp
         src/Endianess.hpp
-        src/FileSystem.PC.cpp 
         src/FileSystem.hpp
-        src/ISO9660Parser.cpp
-        src/ISO9660Parser.hpp
         src/IAudioPlayer.hpp
         src/Mounter.cpp
         src/Mounter.hpp

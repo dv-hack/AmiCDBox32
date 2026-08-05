@@ -2,12 +2,14 @@
 //
 #include "DeviceControllerUSB.hpp"
 
+#include "Disc.hpp"
+#include "VirtualNavDisc.hpp"
+
 #include "LedDebugger.hpp"
 
 #include "bsp/board.h"
 #include "tusb_config.h"
 #include "tusb.h"
-
 #include "class/msc/msc.h"
 #include "class/msc/msc_device.h"
 
@@ -32,9 +34,12 @@ extern "C" {
 #ifndef SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL
 #define SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL 0x1E
 #endif
-
-//static constexpr int kBlockCount_DEBUG = 300000;    // Valore fittizio di test (es. ~600MB di CD)
-static constexpr int kBlockCount_DEBUG = 38037;    // Valore fittizio di test (es. ~60MB di CD)
+#ifndef SCSI_CMD_GET_EVENT_STATUS_NOTIFICATION
+#define SCSI_CMD_GET_EVENT_STATUS_NOTIFICATION 0x4A
+#endif
+#ifndef SCSI_CMD_READ_DISC_INFORMATION
+#define SCSI_CMD_READ_DISC_INFORMATION 0x51
+#endif
 
 // ------------------------------------------------------------------------------------------------
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4])
@@ -53,63 +58,40 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 }
 
 // ------------------------------------------------------------------------------------------------
-// Callback invocata per i comandi SCSI non standard o non gestiti da TinyUSB
 int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize)
 {
     setErrorLed(false);
-    setActivityLed(false);
+    if(!gController) 
+    {
+        tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x04, 0x01);
+        return -1;
+    }
 
-    void const* response_data = NULL;
-    uint16_t response_len = 0;
+    uint8_t opcode = scsi_cmd[0];
+
+    // BYPASS: Comandi di controllo a cui dobbiamo rispondere "Tutto OK" senza fare nulla
+    if (opcode == SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL ||
+        opcode == SCSI_CMD_MODE_SENSE_6 ||
+        opcode == SCSI_CMD_MODE_SENSE_10 ||
+        opcode == SCSI_CMD_GET_CONFIGURATION ||
+        opcode == SCSI_CMD_GET_EVENT_STATUS_NOTIFICATION || // <-- FONDAMENTALE PER WINDOWS
+        opcode == SCSI_CMD_READ_DISC_INFORMATION)
+    {
+        return 0; 
+    }
+
+    uint32_t bytesTransferred = 0;
+    auto status = gController->drive().scsi_executeCommandDescriptorBlock(scsi_cmd, (uint8_t*)buffer, bytesTransferred);
+
+    if (status == SCSI::Status::Good)
+        return bytesTransferred;
     
-    uint8_t command = scsi_cmd[0];
+    // // Se il tuo VirtualNavDisc (o CdDrive) non supporta bene READ_TOC (0x43), fermiamoci per vederlo!
+    // if (opcode == SCSI_CMD_READ_TOC) 
+    //     LedDebugger::instance().visualPanic(3); // 3 LAMPEGGI = READ_TOC fallito
 
-    switch (command)
-    {
-        case SCSI_CMD_READ_TOC: // 0x43
-        {
-            static uint8_t toc[20] = {
-                0x00, 0x12, 
-                0x01,       
-                0x01,       
-                0x00, 0x14, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x14, 0xAA, 0x00, 
-                (uint8_t)(kBlockCount_DEBUG >> 24), (uint8_t)(kBlockCount_DEBUG >> 16), 
-                (uint8_t)(kBlockCount_DEBUG >> 8),  (uint8_t)(kBlockCount_DEBUG & 0xFF) 
-            };
-            
-            response_data = toc;
-            response_len = sizeof(toc);
-            setActivityLed(true);
-            break;
-        }
-
-        // Comandi di controllo comuni che Windows invia ai CD-ROM: li accettiamo silenziosamente
-        case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL: // 0x1E
-        case SCSI_CMD_MODE_SENSE_6:                 // 0x1A
-        case SCSI_CMD_MODE_SENSE_10:                // 0x5A
-        case SCSI_CMD_GET_CONFIGURATION:            // 0x46
-        {
-            response_len = 0; // Nessun dato o operazione riuscita
-            break;
-        }
-
-        default:
-        {
-            // Per veri comandi sconosciuti, manteniamo il blocco ma senza accendere il LED fisso per i controlli standard
-            tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
-            //setErrorLed(true);
-            return -1;
-        }
-    }
-
-    if ( response_data && response_len > 0 )
-    {
-        if(bufsize < response_len) response_len = bufsize;
-        memcpy(buffer, response_data, response_len);
-    }
-
-    return response_len; 
+    tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
+    return -1;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -126,35 +108,46 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun)
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
 {
     (void)lun;
-    
-    if (gController) {
-        *block_count = gController->drive().disc().getTotalSectors();
-    } else {
+    if(!gController || !gController->drive().disc())
+    {
         *block_count = 0;
+        *block_size = 2048;
+        return;
     }
+    
+    auto disc = gController->drive().disc();
+    *block_count = disc->totalSectors();
+    *block_size = 2048; // Forza a 2048 per i CD-ROM
+
+    // // TRAPPOLA: Se il disco dichiara 0 settori, Windows lo considera vuoto
+    // if (*block_count == 0) 
+    //     LedDebugger::instance().visualPanic(2); // 2 LAMPEGGI = totalSectors() sta tornando 0!
 }
 
 // ------------------------------------------------------------------------------------------------
 // 3. Callback per la lettura dei settori
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
-    setErrorLed(false);
-    setActivityLed(true);
+    (void)lun; (void)offset;
 
-    (void)lun;
-    (void)offset;
-
-    uint16_t block_count = bufsize / 2048;
-
-    if (!gController || !gController->drive().readDataToBuffer(lba, block_count, (uint8_t*)buffer))
-    {
-        //setActivityLed(false);
-        //setErrorLed(true);
+    if(!gController || !gController->drive().disc())
         return -1;
-    }   
 
+    setActivityLed(true);
+    const bool ok = gController->drive().disc()->readSectors(lba, bufsize / 2048, SectorSize::ISO, (uint8_t*)buffer);
     setActivityLed(false);
-    setErrorLed(false);
+
+    if (!ok)
+        return -1;
+
+    // if (lba == 16) 
+    // {
+    //     uint8_t* b = (uint8_t*)buffer;
+    //     // La stringa magica a offset 1 DEVE essere "CD001"
+    //     if (b[1] != 'C' || b[2] != 'D' || b[3] != '0' || b[4] != '0' || b[5] != '1') 
+    //         LedDebugger::instance().visualPanic(4); // 4 LAMPEGGI = L'LBA 16 non contiene la firma ISO corretta
+    // }
+
     return bufsize;
 }
 
@@ -185,12 +178,15 @@ void DeviceControllerUSB::init()
     board_init();
     tusb_init();
 
-    _sdCard.mount();
+    FileSystem::init();
+
+    _drive.insertDisc( new VirtualNavDisc( FileSystem::Path("0:/"), "SD_NAVIGATOR" ) );
+
 
     //const auto mounted = _drive.mount("0:/Akira/Akira (Europe).cue");
-    const auto mounted = _drive.mount("0:/AmigaOS3.2CD.iso");
+    //const auto mounted = _drive.insertDisc("0:/AmigaOS3.2CD.iso");
 
-    setReadyLed( mounted );
+    setReadyLed( true);
 }
 
 // ------------------------------------------------------------------------------------------------
