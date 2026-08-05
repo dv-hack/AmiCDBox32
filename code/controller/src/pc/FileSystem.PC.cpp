@@ -30,6 +30,10 @@ namespace FileSystem
     // ============================================================================
     // Path
     // ============================================================================
+    Path::Path(const std::string& p)
+    : _path(p)
+    {}
+
     std::string Path::extension() const
     {
         return fs::path(_path).extension().string();

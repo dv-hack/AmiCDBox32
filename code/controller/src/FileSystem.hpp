@@ -28,7 +28,7 @@ struct FileInfo
 class Path
 {
 public:
-    Path(const std::string& p) : _path(p) {}
+    Path(const std::string& p);
     
     std::string string() const { return _path; }
     std::string extension() const;
