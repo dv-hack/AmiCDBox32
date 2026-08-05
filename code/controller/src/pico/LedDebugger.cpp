@@ -30,3 +30,18 @@ void LedDebugger::init()
 void LedDebugger::signalActivity( bool state ) { gpio_put(LED_ACT_PIN, state);   }
 void LedDebugger::signalReady( bool state )    { gpio_put(LED_READY_PIN, state); }
 void LedDebugger::signalError( bool state )    { gpio_put(LED_ERR_PIN, state);   }
+
+void LedDebugger::visualPanic( int blinks )
+{
+    while(true) 
+    {
+        for(int i = 0; i < blinks; i++) 
+        {
+            setErrorLed(true);
+            sleep_ms(200);
+            setErrorLed(false);
+            sleep_ms(200);
+        }
+        sleep_ms(1500); // Pausa lunga prima di ripetere
+    }
+}

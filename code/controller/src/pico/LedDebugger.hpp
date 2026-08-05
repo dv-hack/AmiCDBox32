@@ -24,6 +24,7 @@ public:
     void signalActivity( bool state );
     void signalReady( bool state );
     void signalError( bool state );
+    void visualPanic( int blinks );
 
 private:
     LedDebugger() = default;
