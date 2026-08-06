@@ -43,10 +43,10 @@ if (BUILD_FOR_PICO)
         src/pico/FileSystem.PICO.cpp
         src/pico/LedDebugger.cpp
         src/pico/LedDebugger.hpp
-        #        src/pico/PwmBuzzerPlayer.cpp
-        #        src/pico/PwmBuzzerPlayer.hpp
-        src/pico/SDCardHandler.cpp
-        src/pico/SDCardHandler.hpp
+        src/pico/PwmBuzzerPlayer.cpp
+        src/pico/PwmBuzzerPlayer.hpp
+#        src/pico/SDCardHandler.cpp
+#        src/pico/SDCardHandler.hpp
         src/pico/tusb_config.h
         src/pico/usb_descriptors.c
         src/CdDrive.cpp
@@ -111,7 +111,6 @@ else()
         src/pc/ISO9660Parser.cpp
         src/pc/ISO9660Parser.hpp
         src/pc/DeviceController.PC.cpp
-        src/pc/_DeviceController.PC.hpp
 #        src/AudioPlayer.cpp
 #        src/AudioPlayer.hpp
 #        src/BinFile.cpp
