@@ -288,46 +288,63 @@ bool VirtualNavDisc::readSectors(uint32_t lba, uint16_t count, const SectorSize 
             // LBA 18: Type M Path Table (Big Endian)
             std::memcpy(dest, _pathTableM.data(), SectorSize::ISO);
         }
-        else
+        else 
         {
-            bool lbaFound = false;
-
-            for (const auto &node : _isoTree)
+            // Verifichiamo a quale nodo appartiene il primo settore
+            const IsoNode* currentNode = nullptr;
+            for (const auto &node : _isoTree) 
             {
-                if (currentLba >= node.startLba && currentLba < (node.startLba + node.sectorCount))
+                if (currentLba >= node.startLba && currentLba < (node.startLba + node.sectorCount)) 
                 {
-                    lbaFound = true;
-                    if (node.isDirectory)
-                    {
-                        // Serviamo la directory pre-compilata dalla RAM
-                        std::memcpy(dest, node.dirData.data(), SectorSize::ISO);
-                    }
-                    else
-                    {
-                        // Passthrough file fisico SD
-                        uint32_t fileSectorOffset = currentLba - node.startLba;
-                        uint32_t byteOffset = fileSectorOffset * SectorSize::ISO;
-
-                        auto file = FileSystem::open(node.sdPath);
-                        if (file.isOpen())
-                        {
-                            file.seek(byteOffset);
-                            uint32_t bytesRead = 0;
-                            file.read(dest, SectorSize::ISO, bytesRead);
-
-                            if (bytesRead < SectorSize::ISO)
-                                std::memset(dest + bytesRead, 0, SectorSize::ISO - bytesRead);
-                            file.close();
-                        }
-                        else
-                            std::memset(dest, 0, SectorSize::ISO);
-                    }
+                    currentNode = &node;
                     break;
                 }
             }
 
-            if (!lbaFound)
+            if (!currentNode) 
+            {
                 std::memset(dest, 0, SectorSize::ISO);
+            } 
+            else if (currentNode->isDirectory) 
+            {
+                // Le directory sono in RAM, nessun problema di velocità
+                std::memcpy(dest, currentNode->dirData.data(), SectorSize::ISO);
+            } 
+            else 
+            {
+                // È un file fisico: calcoliamo quanti settori consecutivi di QUESTO stesso file 
+                // possiamo leggere in un unico colpo (batching basato su 'count')
+                uint32_t fileSectorOffset = currentLba - currentNode->startLba;
+                uint32_t remainingInFile = currentNode->sectorCount - fileSectorOffset;
+                uint32_t sectorsToRead = std::min(static_cast<uint32_t>(count - i), remainingInFile);
+
+                uint32_t byteOffset = fileSectorOffset * SectorSize::ISO;
+
+                // Apriamo il file UNA SOLA VOLTA per il blocco contiguo
+                auto file = FileSystem::open(currentNode->sdPath);
+                if (file.isOpen()) 
+                {
+                    file.seek(byteOffset);
+                    
+                    uint32_t totalBytesToRead = sectorsToRead * SectorSize::ISO;
+                    uint32_t bytesRead = 0;
+                    
+                    // Leggiamo tutto il blocco in un colpo solo direttamente nel buffer di destinazione
+                    file.read(dest, totalBytesToRead, bytesRead);
+                    
+                    if (bytesRead < totalBytesToRead) {
+                        std::memset(dest + bytesRead, 0, totalBytesToRead - bytesRead);
+                    }
+                    file.close();
+                } 
+                else 
+                {
+                    std::memset(dest, 0, sectorsToRead * SectorSize::ISO);
+                }
+
+                // Avanziamo l'indice del ciclo 'i' di quanti settori abbiamo appena letto in blocco
+                i += (sectorsToRead - 1); 
+            }
         }
     }
     return true;
