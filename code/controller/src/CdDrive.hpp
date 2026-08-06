@@ -13,10 +13,16 @@ class IAudioPlayer;
 
 namespace SCSI
 {
-    constexpr uint8_t TEST_UNIT_READY = 0x00;
-    constexpr uint8_t READ_CAPACITY   = 0x25;
-    constexpr uint8_t READ_10         = 0x28;
-    constexpr uint8_t READ_TOC        = 0x43;
+    constexpr uint8_t TEST_UNIT_READY  = 0x00;
+    constexpr uint8_t START_STOP_UNIT  = 0x1B;
+    constexpr uint8_t READ_CAPACITY    = 0x25;
+    constexpr uint8_t READ_10          = 0x28;
+    constexpr uint8_t READ_SUB_CHANNEL = 0x42;
+    constexpr uint8_t READ_TOC         = 0x43;
+    //constexpr uint8_t PLAY_AUDIO_TRACK= 0x48; // unused?
+    constexpr uint8_t PLAY_AUDIO_10    = 0x45;
+    constexpr uint8_t PLAY_AUDIO_MSF   = 0x47;
+    constexpr uint8_t STOP_PLAY_SCAN   = 0x4E;
 
     enum class Status : uint8_t
     {
@@ -41,19 +47,20 @@ public:
 public:
     CdDrive() = default;
 
+    void setAudioPlayer(IAudioPlayer *player) { _audioPlayer = player; }
+
     Disc *disc() { return _disc;}
     Disc *eject();
     void insertDisc( Disc *d );
     State state() const { return _state; }
     bool isReady() const { return _state == State::Ready; }
-
-    void startAudioPlayback(int trackNumber, IAudioPlayer *player);
-    void stopAudioPlayback();
+    void updateAudioPlayback();
 
     SCSI::Status scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uint8_t* outBuffer, uint32_t& bytesTransferred);
         
 private:
-    void tickAudio();
+    void startAudioPlayback( uint32_t startLBA, uint32_t endLBA );
+    void stopAudioPlayback();
 
 private:
     State         _state{ State::NoMedia };

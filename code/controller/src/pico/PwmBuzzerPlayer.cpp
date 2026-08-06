@@ -2,6 +2,9 @@
 //
 #include "PwmBuzzerPlayer.hpp"
 
+#include "Disc.hpp"
+#include "Sector.hpp"
+
 #include "hardware/pwm.h"
 #include "hardware/gpio.h"
 #include "hardware/dma.h"
@@ -14,10 +17,17 @@ PwmBuzzerPlayer::PwmBuzzerPlayer(uint32_t dacPin)
 {}
 
 // ------------------------------------------------------------------------------------------------
-void PwmBuzzerPlayer::startPlayback()
+void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t endLBA )
 {
+    if( !disc )
+        return;
+
+    _disc = disc;
     _isActive = true;
     _currentBuffer = 0;
+    _currentAudioLba = startLBA;
+    _targetAudioLba = endLBA;
+
     
     gpio_set_function(_dacPin, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(_dacPin);
@@ -57,9 +67,11 @@ void PwmBuzzerPlayer::startPlayback()
 // ------------------------------------------------------------------------------------------------
 void PwmBuzzerPlayer::stopPlayback()
 {
+    _disc = nullptr;
     _isActive = false;
+    _currentAudioLba = 0;
+    _targetAudioLba = 0;
 
-    // Spegnimento sicuro del DMA
     if (_dmaChannel >= 0)
     {
         dma_channel_abort(_dmaChannel);
@@ -76,7 +88,31 @@ void PwmBuzzerPlayer::stopPlayback()
 }
 
 // ------------------------------------------------------------------------------------------------
-void PwmBuzzerPlayer::feedSector(const Sector & sector)
+bool PwmBuzzerPlayer::playFrame()
+{
+    if( !_isActive || !_disc)
+        return false;
+
+    if (_currentAudioLba >= _targetAudioLba) 
+    {
+        stopPlayback();
+        return false;
+    }
+
+    uint8_t rawSector[SectorSize::RAW];
+    if ( !_disc->readSectors(_currentAudioLba, 1, SectorSize::RAW,rawSector) ) 
+    {
+        stopPlayback();
+        return false;
+    }
+
+    play(rawSector);
+    _currentAudioLba++;
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+void PwmBuzzerPlayer::play(const uint8_t *sectorData)
 {
     if (!_isActive)
         return;
@@ -86,10 +122,10 @@ void PwmBuzzerPlayer::feedSector(const Sector & sector)
 
     // 1. Processa i bytes nel buffer attualmente "libero"
     int sampleIdx = 0;
-    for (int i = 0; i < sector.size; i += 4)
+    for (int i = 0; i < SectorSize::RAW; i += 4)
     {
-        const int16_t left = static_cast<int16_t>(sector.bytes[i] | (sector.bytes[i + 1] << 8));
-        const int16_t right = static_cast<int16_t>(sector.bytes[i + 2] | (sector.bytes[i + 3] << 8));
+        const int16_t left = static_cast<int16_t>(sectorData[i] | (sectorData[i + 1] << 8));
+        const int16_t right = static_cast<int16_t>(sectorData[i + 2] | (sectorData[i + 3] << 8));
 
         const int32_t mono = (left + right) / 2;
         const uint8_t sample8 = static_cast<uint8_t>((mono >> 8) + 128);
@@ -116,3 +152,7 @@ void PwmBuzzerPlayer::feedSector(const Sector & sector)
     // 4. Cambia buffer per il prossimo settore (Ping-Pong)
     _currentBuffer = 1 - _currentBuffer;
 }
+
+// ------------------------------------------------------------------------------------------------
+uint32_t PwmBuzzerPlayer::currentLBA() const { return _currentAudioLba; }
+bool     PwmBuzzerPlayer::isPlaying() const { return _isActive; }

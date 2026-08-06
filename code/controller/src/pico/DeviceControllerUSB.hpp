@@ -3,7 +3,9 @@
 #pragma once
 
 #include "DeviceController.hpp"
+
 #include "CdDrive.hpp"
+#include "PwmBuzzerPlayer.hpp"
 
 class DeviceControllerUSB : public DeviceController
 {
@@ -16,4 +18,5 @@ public:
 
 private:
     CdDrive _drive;
+    PwmBuzzerPlayer _pwmBuzzerPlayer{20};
 };

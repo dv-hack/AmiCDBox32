@@ -3,6 +3,7 @@
 #include "DeviceControllerUSB.hpp"
 
 #include "Disc.hpp"
+#include "Mounter.hpp"
 #include "VirtualNavDisc.hpp"
 
 #include "LedDebugger.hpp"
@@ -86,10 +87,6 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
     if (status == SCSI::Status::Good)
         return bytesTransferred;
     
-    // // Se il tuo VirtualNavDisc (o CdDrive) non supporta bene READ_TOC (0x43), fermiamoci per vederlo!
-    // if (opcode == SCSI_CMD_READ_TOC) 
-    //     LedDebugger::instance().visualPanic(3); // 3 LAMPEGGI = READ_TOC fallito
-
     tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
     return -1;
 }
@@ -118,14 +115,9 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_siz
     auto disc = gController->drive().disc();
     *block_count = disc->totalSectors();
     *block_size = 2048; // Forza a 2048 per i CD-ROM
-
-    // // TRAPPOLA: Se il disco dichiara 0 settori, Windows lo considera vuoto
-    // if (*block_count == 0) 
-    //     LedDebugger::instance().visualPanic(2); // 2 LAMPEGGI = totalSectors() sta tornando 0!
 }
 
 // ------------------------------------------------------------------------------------------------
-// 3. Callback per la lettura dei settori
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
     (void)lun; (void)offset;
@@ -180,18 +172,28 @@ void DeviceControllerUSB::init()
 
     FileSystem::init();
 
-    _drive.insertDisc( new VirtualNavDisc( FileSystem::Path("0:/"), "SD_NAVIGATOR" ) );
+    _drive.setAudioPlayer(&_pwmBuzzerPlayer);
+
+    //_drive.insertDisc( new VirtualNavDisc( FileSystem::Path("0:/"), "SD_NAVIGATOR" ) );
 
 
     //const auto mounted = _drive.mount("0:/Akira/Akira (Europe).cue");
     //const auto mounted = _drive.insertDisc("0:/AmigaOS3.2CD.iso");
+;
+    //_drive.insertDisc( Mounter::mount( "0:/AmigaOS3.2CD.iso" ) ); // OK!
+    _drive.insertDisc( Mounter::mount( "0:/Benefactor/Benefactor (Europe).cue" ) );
+    //_drive.insertDisc( Mounter::mount( "0:/Akira/Akira (Europe).cue" ) );
+    
 
-    setReadyLed( true);
+    setReadyLed( _drive.state() == CdDrive::State::Ready );
 }
 
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerUSB::update()
 {
     // Motore TinyUSB (gestisce l'handshake in background e chiama le callback)
-    tud_task(); 
+    tud_task();
+
+    if( _drive.state() == CdDrive::State::PlayingAudio )
+        _drive.updateAudioPlayback();
 }
