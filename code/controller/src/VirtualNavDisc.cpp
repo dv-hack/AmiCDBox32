@@ -261,8 +261,10 @@ void VirtualNavDisc::discoverNodes(const std::string &path, uint16_t parentId, u
 }
 
 // ------------------------------------------------------------------------------------------------
-bool VirtualNavDisc::readSectors(uint32_t lba, uint16_t count, const SectorSize &sectorSize, uint8_t *outBuffer) const
+bool VirtualNavDisc::readSectors(uint32_t lba, uint16_t count, const SectorSize &sectorSize, uint8_t *outBuffer, uint32_t maxBufferSize ) const
 {
+    (void) maxBufferSize;
+
     for (uint32_t i = 0; i < count; ++i)
     {
         uint32_t currentLba = lba + i;

@@ -56,7 +56,7 @@ public:
     bool isReady() const { return _state == State::Ready; }
     void updateAudioPlayback();
 
-    SCSI::Status scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uint8_t* outBuffer, uint32_t& bytesTransferred);
+    SCSI::Status scsi_executeCommandDescriptorBlock(const uint8_t* cdb, uint8_t* outBuffer, uint16_t bufSize, uint32_t& bytesTransferred);
         
 private:
     void startAudioPlayback( uint32_t startLBA, uint32_t endLBA );

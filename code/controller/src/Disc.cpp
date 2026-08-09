@@ -2,6 +2,7 @@
 //
 #include "Disc.hpp"
 
+#include <iostream>
 
 // ------------------------------------------------------------------------------------------------
 uint32_t Disc::totalSectors() const 
@@ -12,14 +13,27 @@ uint32_t Disc::totalSectors() const
 }
 
 // ------------------------------------------------------------------------------------------------
-bool Disc::readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer) const
+bool Disc::readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer, uint32_t maxBufferSize) const
 {
+#if defined DEBUG
+    std::cout << "[READ Sector]"
+              << "  LBA:          " << lba << "\n"
+              << "  blockCount:   " << blockCount << "\n"
+              << "  sectorSize:   " << sectorSize << "\n"
+              << "  maxBufferSize:" << maxBufferSize << "\n"
+              ;
+#endif
+
+    // Guardrail: se i dati richiesti superano la RAM del buffer, abortiamo subito
+    if ((uint32_t)blockCount * sectorSize > maxBufferSize)
+        return false; 
+
     for (uint16_t i = 0; i < blockCount; ++i)
     {
         uint32_t currentLba = lba + i;
         Track* targetTrack = nullptr;
 
-        // Trova la traccia che contiene questo LBA
+        // look for the track that contains this LBA
         for ( auto& t : _tracks)
             if (currentLba >= t.startLBA() && currentLba < (t.startLBA() + t.sectorCount()))
             {

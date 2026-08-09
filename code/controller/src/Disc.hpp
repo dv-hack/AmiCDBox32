@@ -15,7 +15,7 @@ public:
     Disc() = default;
     virtual ~Disc() = default;
 
-    virtual bool     readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer) const;
+    virtual bool     readSectors(uint32_t lba, uint16_t blockCount, const SectorSize &sectorSize, uint8_t* buffer, uint32_t maxBufferSize) const;
     uint32_t totalSectors() const;
 
     bool         isEmpty()         const  { return _tracks.empty(); }

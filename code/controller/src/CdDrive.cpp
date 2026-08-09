@@ -5,6 +5,8 @@
 #include "Endianess.hpp"
 #include "IAudioPlayer.hpp"
 
+#include "LedDebugger.hpp"
+
 
 #include <iostream>
 #include <cstring>
@@ -50,6 +52,9 @@ void CdDrive::startAudioPlayback(uint32_t startLBA, uint32_t endLBA)
     if (_state == State::PlayingAudio)
         stopAudioPlayback();
 
+    if( endLBA <= startLBA )
+        return;
+
     _state = State::PlayingAudio;
     if (_audioPlayer)
         _audioPlayer->startPlayback(_disc, startLBA, endLBA);
@@ -77,7 +82,7 @@ void CdDrive::updateAudioPlayback()
 }
 
 // ------------------------------------------------------------------------------------------------
-SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uint8_t *outBuffer, uint32_t &bytesTransferred)
+SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uint8_t *outBuffer, uint16_t bufSize, uint32_t &bytesTransferred)
 {
     bytesTransferred = 0;
 
@@ -85,6 +90,9 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         return SCSI::Status::CheckCondition; // Media Not Present
 
     const uint8_t opcode = cdb[0];
+
+    printf("[SCSI] Opcode: %02X | CDB: %02X %02X %02X %02X %02X %02X\n", 
+           cdb[0], cdb[1], cdb[2], cdb[3], cdb[4], cdb[5], cdb[6]);    
 
     switch (opcode)
     {
@@ -113,7 +121,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         if (sectorCount == 0)
             return SCSI::Status::Good;
 
-        if (_disc->readSectors(lba, sectorCount, SectorSize::ISO, outBuffer))
+        if (_disc->readSectors(lba, sectorCount, SectorSize::ISO, outBuffer, bufSize))
         {
             bytesTransferred = sectorCount * SectorSize::ISO;
             return SCSI::Status::Good;
@@ -123,6 +131,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
 
     case SCSI::READ_TOC:
     {
+        setReadyLed(false);
         bool msf = (cdb[1] & 0x02) != 0; // Se true, l'host vuole gli indirizzi in MSF
         uint8_t startTrack = cdb[6];
         uint16_t allocLen = Endianess::readBE16(&cdb[7]);
@@ -193,25 +202,26 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         uint32_t toCopy = (allocLen < ptr) ? allocLen : ptr;
         std::memcpy(outBuffer, response, toCopy);
         bytesTransferred = toCopy;
+        setReadyLed(true);
         return SCSI::Status::Good;
     }
 
-    case SCSI::START_STOP_UNIT:
-    {
-        bool loEj = (cdb[4] & 0x02) != 0;
-        bool start = (cdb[4] & 0x01) != 0;
+    // case SCSI::START_STOP_UNIT:
+    // {
+    //     bool loEj = (cdb[4] & 0x02) != 0;
+    //     bool start = (cdb[4] & 0x01) != 0;
 
-        if (loEj && !start)
-        {
-            stopAudioPlayback();
-            eject(); // Sgancia il disco
-        }
-        else if (!start)
-        {
-            stopAudioPlayback(); // Ferma solo il motore/riproduzione
-        }
-        return SCSI::Status::Good;
-    }
+    //     if (loEj && !start)
+    //     {
+    //         stopAudioPlayback();
+    //         eject(); // Sgancia il disco
+    //     }
+    //     else if (!start)
+    //     {
+    //         stopAudioPlayback(); // Ferma solo il motore/riproduzione
+    //     }
+    //     return SCSI::Status::Good;
+    // }
 
     case SCSI::PLAY_AUDIO_10:
     {
@@ -234,7 +244,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         bool msf = (cdb[1] & 0x02) != 0;
         uint8_t subQFormat = cdb[2];
         uint16_t allocLen = Endianess::readBE16(&cdb[6]);
-
+        
         uint8_t response[16] = {0};
 
         // Header Sub-Channel
@@ -312,14 +322,49 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         uint32_t startLba = msfToLba(startM, startS, startF);
         uint32_t endLba   = msfToLba(endM, endS, endF);
 
-        if (endLba > startLba && _audioPlayer)
+        startAudioPlayback(startLba, endLba);
+        return SCSI::Status::Good;
+    }
+
+    case 0xBE: // SCSI::READ_CD
+    {
+        // Byte 2-5: starting LBA
+        uint32_t startLba = Endianess::readBE32(&cdb[2]);
+        
+        // Byte 6-8: number of sectors requested (24-bit)
+        uint32_t transferLength = (cdb[6] << 16) | (cdb[7] << 8) | cdb[8];
+
+        if (transferLength == 0) 
         {
-            _audioPlayer->startPlayback(_disc, startLba, endLba);
-            _state = State::PlayingAudio;
+            bytesTransferred = 0;
+            return SCSI::Status::Good;
         }
 
-        return SCSI::Status::Good;
-    }    
+        if (!_disc)
+            return SCSI::Status::CheckCondition;
+
+        const auto sectorSize = SectorSize::RAW; // 2352 byte
+
+        // 1. Compute how many sectors really fit into the provided buffer
+        const uint32_t maxSectorsThatFit = bufSize / sectorSize;
+        if (maxSectorsThatFit == 0) 
+            return SCSI::Status::CheckCondition; 
+
+        // 2. limit maximum read length
+        const uint32_t sectorsToRead = (transferLength < maxSectorsThatFit) ? transferLength : maxSectorsThatFit;
+
+        // 3. read sectors from the disc
+        if (_disc->readSectors(startLba, sectorsToRead, sectorSize, outBuffer, bufSize))
+        {
+            // 4. push sectors to the audio player (tbd?)
+            // if( _audioPlayer )
+            //     _audioPlayer->play( outBuffer );
+            bytesTransferred = sectorsToRead * sectorSize;
+            return SCSI::Status::Good;
+        }
+
+        return SCSI::Status::CheckCondition;
+    }
 
     default:
         return SCSI::Status::CheckCondition;

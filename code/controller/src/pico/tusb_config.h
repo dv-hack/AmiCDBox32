@@ -30,7 +30,8 @@
 #define CFG_TUD_VENDOR              0
 
 // Configurazione buffer per MSC (2048 byte = 1 settore CD-ROM standard)
-#define CFG_TUD_MSC_EP_BUFSIZE      2048
+//#define CFG_TUD_MSC_EP_BUFSIZE  4096 // ok for simple audio playback
+#define CFG_TUD_MSC_EP_BUFSIZE  0xfffe // ok for host audio playback (bigger buffers allocations)
 #define CFG_TUD_MSC_DEVICE_TYPE 0x05
 
 #ifdef __cplusplus

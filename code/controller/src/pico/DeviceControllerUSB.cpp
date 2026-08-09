@@ -62,6 +62,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize)
 {
     setErrorLed(false);
+    setActivityLed(false);
     if(!gController) 
     {
         tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x04, 0x01);
@@ -70,22 +71,28 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
 
     uint8_t opcode = scsi_cmd[0];
 
-    // BYPASS: Comandi di controllo a cui dobbiamo rispondere "Tutto OK" senza fare nulla
+    // BYPASS control commands (tbd)
     if (opcode == SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL ||
         opcode == SCSI_CMD_MODE_SENSE_6 ||
         opcode == SCSI_CMD_MODE_SENSE_10 ||
         opcode == SCSI_CMD_GET_CONFIGURATION ||
-        opcode == SCSI_CMD_GET_EVENT_STATUS_NOTIFICATION || // <-- FONDAMENTALE PER WINDOWS
+        opcode == SCSI_CMD_GET_EVENT_STATUS_NOTIFICATION ||
         opcode == SCSI_CMD_READ_DISC_INFORMATION)
     {
         return 0; 
     }
 
-    uint32_t bytesTransferred = 0;
-    auto status = gController->drive().scsi_executeCommandDescriptorBlock(scsi_cmd, (uint8_t*)buffer, bytesTransferred);
+    setActivityLed(true);
 
+    constexpr uint16_t MAX_HARDWARE_RAM_LIMIT = CFG_TUD_MSC_EP_BUFSIZE;
+    uint16_t safeBufSize = (bufsize > MAX_HARDWARE_RAM_LIMIT) ? MAX_HARDWARE_RAM_LIMIT : bufsize;
+
+    uint32_t bytesTransferred = 0;
+    auto status = gController->drive().scsi_executeCommandDescriptorBlock(scsi_cmd, (uint8_t*)buffer, safeBufSize, bytesTransferred);
+    
+    setActivityLed(false);
     if (status == SCSI::Status::Good)
-        return bytesTransferred;
+        return bytesTransferred; 
     
     tud_msc_set_sense(lun, SCSI_SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
     return -1;
@@ -97,7 +104,7 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun)
 {
     (void)lun;
     // True = Disco inserito e pronto; False = Nessun disco / Cassetto aperto
-    return true; 
+    return gController && gController->drive().isReady(); 
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -126,20 +133,11 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
         return -1;
 
     setActivityLed(true);
-    const bool ok = gController->drive().disc()->readSectors(lba, bufsize / 2048, SectorSize::ISO, (uint8_t*)buffer);
+    const bool ok = gController->drive().disc()->readSectors(lba, bufsize / SectorSize::ISO, SectorSize::ISO, (uint8_t*)buffer, bufsize);
     setActivityLed(false);
 
     if (!ok)
         return -1;
-
-    // if (lba == 16) 
-    // {
-    //     uint8_t* b = (uint8_t*)buffer;
-    //     // La stringa magica a offset 1 DEVE essere "CD001"
-    //     if (b[1] != 'C' || b[2] != 'D' || b[3] != '0' || b[4] != '0' || b[5] != '1') 
-    //         LedDebugger::instance().visualPanic(4); // 4 LAMPEGGI = L'LBA 16 non contiene la firma ISO corretta
-    // }
-
     return bufsize;
 }
 
@@ -181,7 +179,8 @@ void DeviceControllerUSB::init()
     //const auto mounted = _drive.insertDisc("0:/AmigaOS3.2CD.iso");
 ;
     //_drive.insertDisc( Mounter::mount( "0:/AmigaOS3.2CD.iso" ) ); // OK!
-    _drive.insertDisc( Mounter::mount( "0:/Benefactor/Benefactor (Europe).cue" ) );
+    _drive.insertDisc( Mounter::mount( "0:/Benefactor/Benefactor (Europe).cue" ) );// error reading track 17 and 18
+    //_drive.insertDisc( Mounter::mount( "0:/Alien Breed 3D/Alien Breed 3D (Europe).cue" ) );
     //_drive.insertDisc( Mounter::mount( "0:/Akira/Akira (Europe).cue" ) );
     
 
@@ -191,8 +190,7 @@ void DeviceControllerUSB::init()
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerUSB::update()
 {
-    // Motore TinyUSB (gestisce l'handshake in background e chiama le callback)
-    tud_task();
+    tud_task(); // update tinyUSB engine
 
     if( _drive.state() == CdDrive::State::PlayingAudio )
         _drive.updateAudioPlayback();

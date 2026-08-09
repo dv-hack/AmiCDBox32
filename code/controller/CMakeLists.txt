@@ -93,7 +93,7 @@ if (BUILD_FOR_PICO)
     pico_set_program_version(AmiCDBox32 "0.3.0")
 
     pico_enable_stdio_usb(AmiCDBox32 0)
-    pico_enable_stdio_uart(AmiCDBox32 0)
+    pico_enable_stdio_uart(AmiCDBox32 1)
 
     # Generate the .uf2 file automatically
     pico_add_extra_outputs(AmiCDBox32)

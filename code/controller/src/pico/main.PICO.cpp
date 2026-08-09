@@ -9,13 +9,20 @@
 #endif
 
 #include "LedDebugger.hpp"
+#include "Version.hpp"
 
+#include <iostream>
 
 #define TINYUSB_MODE
 
 int main()
 {
-    
+    std::cout << "============================================================\n";
+    std::cout << "============================================================\n";
+    std::cout << "   AmiCDBox32 Debug Console [ VERSION " << FirmwareVersion << " ]\n";
+    std::cout << "============================================================\n";
+    std::cout << "============================================================\n";
+
 #if defined TINY_USB_MODE
     DeviceController* controller = new DeviceControllerUSB;
 #else

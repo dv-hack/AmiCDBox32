@@ -94,7 +94,7 @@ void DeviceControllerPC::cmd_read()
         uint8_t responseBuffer[2048] = {0};
         uint32_t bytesTransferred = 0;
 
-        if (auto ec = _drive.scsi_executeCommandDescriptorBlock(readCapCdb, responseBuffer, bytesTransferred) != SCSI::Status::Good)
+        if (auto ec = _drive.scsi_executeCommandDescriptorBlock(readCapCdb, responseBuffer, bytesTransferred, 2048) != SCSI::Status::Good)
         {
             std::cout << "Error reading capacity: " << static_cast<int>(ec) << "\n";
             return;
@@ -119,7 +119,7 @@ void DeviceControllerPC::cmd_read()
 
         uint32_t bytesTransferred = 0;
 
-        if (auto ec = _drive.scsi_executeCommandDescriptorBlock(cdb, outBuffer, bytesTransferred) != SCSI::Status::Good)
+        if (auto ec = _drive.scsi_executeCommandDescriptorBlock(cdb, outBuffer, bytesTransferred, 256) != SCSI::Status::Good)
         {
             std::cout << "Error reading TOC: " << static_cast<int>(ec) << "\n";
             return;
@@ -177,7 +177,7 @@ void DeviceControllerPC::cmd_read()
         cdb[9] = 0x00;                     // Control
 
         uint32_t bytesTransferred = 0;
-        SCSI::Status status = _drive.scsi_executeCommandDescriptorBlock(cdb, sectorBuffer, bytesTransferred);
+        SCSI::Status status = _drive.scsi_executeCommandDescriptorBlock(cdb, sectorBuffer, bytesTransferred, 2048);
 
         assert(status == SCSI::Status::Good && "READ_10 ha restituito CheckCondition!");
 
