@@ -15,6 +15,8 @@ public:
     virtual void stopPlayback() = 0;
     virtual bool playFrame() = 0;
 
+    virtual void play(const uint8_t *sectorData) = 0;
+
     virtual uint32_t currentLBA() const = 0;
     virtual bool isPlaying() const = 0;
 };

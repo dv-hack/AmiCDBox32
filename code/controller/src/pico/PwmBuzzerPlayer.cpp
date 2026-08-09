@@ -11,26 +11,10 @@
 #include "hardware/clocks.h"
 #include "pico/time.h"
 
-// ------------------------------------------------------------------------------------------------
-PwmBuzzerPlayer::PwmBuzzerPlayer(uint32_t dacPin)
-: _dacPin(dacPin) 
-{}
-
-// ------------------------------------------------------------------------------------------------
-void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t endLBA )
+static inline void initialize( uint32_t pin, int &dmaChannel )
 {
-    if( !disc )
-        return;
-
-    _disc = disc;
-    _isActive = true;
-    _currentBuffer = 0;
-    _currentAudioLba = startLBA;
-    _targetAudioLba = endLBA;
-
-    
-    gpio_set_function(_dacPin, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(_dacPin);
+    gpio_set_function(pin, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(pin);
 
     // 1. Configurazione PWM (Diventa il nostro metronomo a 44.1kHz)
     pwm_config config = pwm_get_default_config();
@@ -43,11 +27,11 @@ void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t end
     pwm_config_set_clkdiv(&config, clkdiv);
     pwm_config_set_wrap(&config, 255);    
     pwm_init(slice_num, &config, true);
-    pwm_set_gpio_level(_dacPin, 128); // Segnale centrale (silenzio)
+    pwm_set_gpio_level(pin, 128); // Segnale centrale (silenzio)
 
     // 2. Configurazione DMA
-    _dmaChannel = dma_claim_unused_channel(true);
-    dma_channel_config dma_config = dma_channel_get_default_config(_dmaChannel);
+    dmaChannel = dma_claim_unused_channel(true);
+    dma_channel_config dma_config = dma_channel_get_default_config(dmaChannel);
     
     channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32); // Scriviamo 32 bit per aggiornare il registro CC
     channel_config_set_read_increment(&dma_config, true);            // Avanza nel nostro _sampleBuffer
@@ -55,7 +39,7 @@ void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t end
     channel_config_set_dreq(&dma_config, pwm_get_dreq(slice_num));   // Sincronizza il trasferimento con il wrap del PWM
 
     dma_channel_configure(
-        _dmaChannel,
+        dmaChannel,
         &dma_config,
         &pwm_hw->slice[slice_num].cc, // Indirizzo di destinazione: il registro Counter Compare del PWM
         nullptr,                      // Indirizzo sorgente (verrà impostato in feedSector)
@@ -64,33 +48,64 @@ void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t end
     );
 }
 
+static inline void deinitialize( uint32_t pin, int &dmaChannel )
+{
+    if (dmaChannel >= 0)
+    {
+        dma_channel_abort(dmaChannel);
+        dma_channel_unclaim(dmaChannel);
+        dmaChannel = -1;
+    }
+
+    uint slice_num = pwm_gpio_to_slice_num(pin);
+    pwm_set_enabled(slice_num, false);
+    
+    gpio_set_function(pin, GPIO_FUNC_SIO);
+    gpio_set_dir(pin, GPIO_OUT);
+    gpio_put(pin, 0); // Evita ronzii a riposo
+}
+
+
+// ------------------------------------------------------------------------------------------------
+PwmBuzzerPlayer::PwmBuzzerPlayer(uint32_t dacPin)
+: _dacPin(dacPin) 
+{
+    initialize( _dacPin, _dmaChannel );
+}
+
+// ------------------------------------------------------------------------------------------------
+PwmBuzzerPlayer::~PwmBuzzerPlayer()
+{
+    deinitialize(_dacPin, _dmaChannel );
+}
+
+// ------------------------------------------------------------------------------------------------
+void PwmBuzzerPlayer::startPlayback( Disc *disc, uint32_t startLBA, uint32_t endLBA )
+{
+    if( !disc )
+        return;
+
+    _disc = disc;
+    _currentBuffer = 0;
+    _currentAudioLba = startLBA;
+    _targetAudioLba = endLBA;   
+}
+
 // ------------------------------------------------------------------------------------------------
 void PwmBuzzerPlayer::stopPlayback()
 {
     _disc = nullptr;
-    _isActive = false;
     _currentAudioLba = 0;
     _targetAudioLba = 0;
+    _currentBuffer  = 0;
 
-    if (_dmaChannel >= 0)
-    {
-        dma_channel_abort(_dmaChannel);
-        dma_channel_unclaim(_dmaChannel);
-        _dmaChannel = -1;
-    }
-
-    uint slice_num = pwm_gpio_to_slice_num(_dacPin);
-    pwm_set_enabled(slice_num, false);
-    
-    gpio_set_function(_dacPin, GPIO_FUNC_SIO);
-    gpio_set_dir(_dacPin, GPIO_OUT);
-    gpio_put(_dacPin, 0); // Evita ronzii a riposo
+    deinitialize( _dacPin, _dmaChannel );
 }
 
 // ------------------------------------------------------------------------------------------------
 bool PwmBuzzerPlayer::playFrame()
 {
-    if( !_isActive || !_disc)
+    if( !_disc)
         return false;
 
     if (_currentAudioLba >= _targetAudioLba) 
@@ -100,7 +115,7 @@ bool PwmBuzzerPlayer::playFrame()
     }
 
     uint8_t rawSector[SectorSize::RAW];
-    if ( !_disc->readSectors(_currentAudioLba, 1, SectorSize::RAW,rawSector) ) 
+    if ( !_disc->readSectors(_currentAudioLba, 1, SectorSize::RAW,rawSector, SectorSize::RAW) ) 
     {
         stopPlayback();
         return false;
@@ -114,9 +129,6 @@ bool PwmBuzzerPlayer::playFrame()
 // ------------------------------------------------------------------------------------------------
 void PwmBuzzerPlayer::play(const uint8_t *sectorData)
 {
-    if (!_isActive)
-        return;
-
     uint chan = pwm_gpio_to_channel(_dacPin);
     uint32_t* currentBuf = _sampleBuffer[_currentBuffer];
 
@@ -155,4 +167,4 @@ void PwmBuzzerPlayer::play(const uint8_t *sectorData)
 
 // ------------------------------------------------------------------------------------------------
 uint32_t PwmBuzzerPlayer::currentLBA() const { return _currentAudioLba; }
-bool     PwmBuzzerPlayer::isPlaying() const { return _isActive; }
+bool     PwmBuzzerPlayer::isPlaying() const { return _disc != nullptr; }

@@ -8,6 +8,7 @@ class PwmBuzzerPlayer : public IAudioPlayer
 {
 public:
     explicit PwmBuzzerPlayer(uint32_t dacPin);
+    virtual ~PwmBuzzerPlayer();
 
     void startPlayback( Disc *disc, uint32_t startLBA, uint32_t endLBA ) override;
     void stopPlayback() override;
@@ -16,8 +17,8 @@ public:
     uint32_t currentLBA() const override;
     bool isPlaying() const override;
 
-private:
     void play(const uint8_t *sectorData);
+private:
 
 private:
     Disc *_disc{nullptr}; // not owned
@@ -27,7 +28,6 @@ private:
     uint32_t _targetAudioLba{0};
 
     
-    bool _isActive = false;
     int _dmaChannel = -1;
     int _currentBuffer = 0;
 
