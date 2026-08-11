@@ -64,29 +64,31 @@ namespace FileSystem
     struct Dir::Impl
     {
         DIR dir;
-        FILINFO entry;
+        Path absolutePath{""};
+        // FILINFO entry;
         bool hasNext{false};
 
-        // prefetch helper to read the next entry in the directory, skipping "." and ".."
-        static bool readNextEntry(Impl &impl)
-        {
-            while (true)
-            {
-                FRESULT res = f_readdir(&impl.dir, &impl.entry);
-                if (res != FR_OK || impl.entry.fname[0] == '\0')
-                {
-                    impl.hasNext = false;
-                    return false;
-                }
+        // // prefetch helper to read the next entry in the directory, skipping "." and ".."
+        // static bool readNextEntry(Impl &impl)
+        // {
+        //     while (true)
+        //     {
+        //         FRESULT res = f_readdir(&impl.dir, &impl.entry);
+        //         //std::cout << "[>>] " << (impl.entry.fname[0] == '\0' ? "-" : impl.entry.fname) << "\n";
+        //         if (res != FR_OK || impl.entry.fname[0] == '\0')
+        //         {
+        //             impl.hasNext = false;
+        //             return false;
+        //         }
 
-                std::string_view name(impl.entry.fname);
-                if (name == "." || name == "..")
-                    continue;
+        //         std::string_view name(impl.entry.fname);
+        //         if (name == "." || name == "..")
+        //             continue;
 
-                impl.hasNext = true;
-                return true;
-            }
-        }
+        //         impl.hasNext = true;
+        //         return true;
+        //     }
+        // }
     };
 
     // Helper function to normalize paths for FatFs
@@ -229,7 +231,7 @@ namespace FileSystem
     // Dir
     // ============================================================================
     Dir::Dir() = default;
-    Dir::~Dir() = default;
+    Dir::~Dir() { close(); }
     Dir::Dir(Dir &&other) noexcept = default;
     Dir &Dir::operator=(Dir &&other) noexcept = default;
 
@@ -254,15 +256,30 @@ namespace FileSystem
 
     bool Dir::readNext(FileInfo &outInfo)
     {
-        if (!isOpen() || !_impl->hasNext)
+        if (!isOpen()/* || !_impl->hasNext*/)
             return false;
 
-        outInfo.name = _impl->entry.fname;
-        outInfo.isDirectory = (_impl->entry.fattrib & AM_DIR) != 0;
-        outInfo.size = outInfo.isDirectory ? 0 : static_cast<uint32_t>(_impl->entry.fsize);
+        while (true)
+        {
+            FILINFO entry;
+            FRESULT res = f_readdir(&_impl->dir, &entry);
+            if (res != FR_OK || entry.fname[0] == '\0')
+                return false;
 
-        // prefetch the next entry for subsequent calls
-        return Impl::readNextEntry(*_impl);
+            std::string_view name(entry.fname);
+            if (name == "." || name == "..")
+                continue;
+
+            outInfo.name = (_impl->absolutePath / entry.fname).string();
+            outInfo.isDirectory = (entry.fattrib & AM_DIR) != 0;
+            outInfo.size = outInfo.isDirectory ? 0 : static_cast<uint32_t>(entry.fsize);
+            return true;
+        }
+
+
+
+        // // prefetch the next entry for subsequent calls
+        // return Impl::readNextEntry(*_impl);
     }
 
     // ============================================================================
@@ -288,19 +305,20 @@ namespace FileSystem
     }
 
     Dir openDir(const std::string &path)
-    {
-        const std::string normalized = normalizeFatPath(path);
+    {       
+        //std::cout << "[FILESYSTEM] " << normalized << '\n';
 
         Dir d;
         d._impl = std::make_unique<Dir::Impl>();
-        const auto result = f_opendir(&d._impl->dir, normalized.c_str());
+        d._impl->absolutePath = normalizeFatPath(path);
+        const auto result = f_opendir(&d._impl->dir, d._impl->absolutePath.string().c_str() );
         if (result != FR_OK)
         {
-            std::cout << "[FileSystem] Error: Cannot open directory: " << normalized << " Error code: " << static_cast<int>(result) << "\n";
+            std::cout << "[FileSystem] Error: Cannot open directory: " << d._impl->absolutePath.string() << " Error code: " << static_cast<int>(result) << "\n";
             d._impl.reset();
         }
 
-        Dir::Impl::readNextEntry(*d._impl); // prefetch the first entry
+        //Dir::Impl::readNextEntry(*d._impl); // prefetch the first entry
         return d;
     }
 
