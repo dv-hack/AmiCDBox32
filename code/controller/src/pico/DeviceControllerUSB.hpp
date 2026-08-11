@@ -5,6 +5,8 @@
 #include "DeviceController.hpp"
 
 #include "CdDrive.hpp"
+#include "DiscPlaylist.hpp"
+#include "PhysicalButton.hpp"
 #include "PwmBuzzerPlayer.hpp"
 
 class DeviceControllerUSB : public DeviceController
@@ -18,5 +20,10 @@ public:
 
 private:
     CdDrive _drive;
+
+    DiscPlaylist _playlist;
+    
     PwmBuzzerPlayer _pwmBuzzerPlayer{20};
+    PhysicalButton _buttonMount{15};
+    PhysicalButton _buttonNext {14};
 };

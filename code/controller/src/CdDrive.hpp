@@ -64,6 +64,6 @@ private:
 
 private:
     State         _state{ State::NoMedia };
-    Disc         *_disc;
+    Disc         *_disc { nullptr };
     IAudioPlayer *_audioPlayer;
 };

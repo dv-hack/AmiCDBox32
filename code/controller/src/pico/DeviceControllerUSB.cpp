@@ -15,6 +15,7 @@
 #include "class/msc/msc_device.h"
 
 #include <cstring>
+#include <iostream>
 
 static DeviceControllerUSB *gController{nullptr};
 
@@ -179,18 +180,49 @@ void DeviceControllerUSB::init()
     //const auto mounted = _drive.insertDisc("0:/AmigaOS3.2CD.iso");
 ;
     //_drive.insertDisc( Mounter::mount( "0:/AmigaOS3.2CD.iso" ) ); // OK!
-    _drive.insertDisc( Mounter::mount( "0:/Benefactor/Benefactor (Europe).cue" ) );// error reading track 17 and 18
+    //_drive.insertDisc( Mounter::mount( "0:/Benefactor/Benefactor (Europe).cue" ) );// error reading track 17 and 18
     //_drive.insertDisc( Mounter::mount( "0:/Alien Breed 3D/Alien Breed 3D (Europe).cue" ) );
     //_drive.insertDisc( Mounter::mount( "0:/Akira/Akira (Europe).cue" ) );
     
 
-    setReadyLed( _drive.state() == CdDrive::State::Ready );
+    setReadyLed( _playlist.scanDirectory(FileSystem::Path("0:/") ) );
 }
 
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerUSB::update()
 {
     tud_task(); // update tinyUSB engine
+
+    const auto mountEvent = _buttonMount.update();
+    if( mountEvent == PhysicalButton::Event::ShortPress )
+    {
+        std::cout << "[SYSTEM] Eject pressed: unmounting disc...\n";
+        auto d = _drive.eject();
+        delete d;
+    } 
+    else if ( mountEvent == PhysicalButton::Event::LongPress )
+    {
+        std::cout << "[SYSTEM] Eject long press: Switching to VirtualNavDisc...\n";
+        auto d = _drive.eject();
+        delete d;
+        _drive.insertDisc( new VirtualNavDisc( FileSystem::Path("0:/"), "SD_NAVIGATOR" ) );
+    }
+    
+    
+    const auto nextEvent  = _buttonNext.update();
+    if( nextEvent == PhysicalButton::Event::ShortPress )
+    {
+        auto nextDisc = _playlist.nextEntry();        
+        std::cout << "[SYSTEM] Next pressed: Mounting " << nextDisc.string() << "\n";
+        auto d = _drive.eject();
+        delete d;
+        _drive.insertDisc( Mounter::mount( nextDisc.string() ) );
+    } 
+    else if ( nextEvent == PhysicalButton::Event::LongPress )
+    {
+        std::cout << "[SYSTEM] Next long press:\n";
+    }
+
 
     if( _drive.state() == CdDrive::State::PlayingAudio )
         _drive.updateAudioPlayback();

@@ -43,16 +43,18 @@ if (BUILD_FOR_PICO)
         src/pico/FileSystem.PICO.cpp
         src/pico/LedDebugger.cpp
         src/pico/LedDebugger.hpp
+        src/pico/PhysicalButton.cpp
+        src/pico/PhysicalButton.hpp
         src/pico/PwmBuzzerPlayer.cpp
         src/pico/PwmBuzzerPlayer.hpp
-#        src/pico/SDCardHandler.cpp
-#        src/pico/SDCardHandler.hpp
         src/pico/tusb_config.h
         src/pico/usb_descriptors.c
         src/CdDrive.cpp
         src/CdDrive.hpp
         src/Disc.cpp
         src/Disc.hpp
+        src/DiscPlaylist.cpp
+        src/DiscPlaylist.hpp        
         src/CueParser.cpp
         src/CueParser.hpp
         src/DeviceController.hpp
@@ -128,8 +130,6 @@ else()
         src/Mounter.cpp
         src/Mounter.hpp
         src/Sector.hpp
-#        src/SDCardHandler.cpp
-#        src/SDCardHandler.hpp
         src/Version.hpp
         src/Track.cpp
         src/Track.hpp
