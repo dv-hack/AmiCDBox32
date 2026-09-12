@@ -1,0 +1,17 @@
+.program ide_strobe_dior
+.wrap_target
+    wait 0 gpio 16      ; ATTENDE che DIOR# (GP16) vada basso
+    in pins, 7          ; Campiona gli indirizzi (GP11..GP17)
+    push block          ; Invia al FIFO
+    irq 0               ; Genera interrupt
+    wait 1 gpio 16      ; ATTENDE che DIOR# torni alto prima di riarmarsi
+.wrap
+
+.program ide_strobe_diow
+.wrap_target
+    wait 0 gpio 17      ; ATTENDE che DIOW# (GP17) vada basso
+    in pins, 7
+    push block
+    irq 0
+    wait 1 gpio 17      ; ATTENDE che DIOW# torni alto
+.wrap

@@ -5,10 +5,6 @@
 #include "Endianess.hpp"
 #include "IAudioPlayer.hpp"
 
-#include "LedDebugger.hpp"
-
-
-#include <iostream>
 #include <cstring>
 
 #pragma region helpers
@@ -131,7 +127,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
 
     case SCSI::READ_TOC:
     {
-        setReadyLed(false);
+        //setReadyLed(false);
         bool msf = (cdb[1] & 0x02) != 0; // Se true, l'host vuole gli indirizzi in MSF
         uint8_t startTrack = cdb[6];
         uint16_t allocLen = Endianess::readBE16(&cdb[7]);
@@ -202,7 +198,7 @@ SCSI::Status CdDrive::scsi_executeCommandDescriptorBlock(const uint8_t *cdb, uin
         uint32_t toCopy = (allocLen < ptr) ? allocLen : ptr;
         std::memcpy(outBuffer, response, toCopy);
         bytesTransferred = toCopy;
-        setReadyLed(true);
+        //setReadyLed(true);
         return SCSI::Status::Good;
     }
 

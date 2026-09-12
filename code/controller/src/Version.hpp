@@ -2,4 +2,4 @@
 //
 #pragma once
 
-static constexpr char FirmwareVersion[] = "0.4.0-alpha";
+static constexpr char FirmwareVersion[] = "0.5.0-ide";
