@@ -5,7 +5,9 @@
 #include "Pins.hpp"
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
+
 #include <cstdint>
+#include <array>
 
 class DeviceControllerGPIO;
 
@@ -35,6 +37,8 @@ public:
     void init(PIO pioInstance = pio0);
     void update();
 
+    void printTrace();
+
     // Gestione direzione transceiver 74LVC245
     void setTransceiverDirection(bool driveToAmiga);
     void enableTransceivers(bool enableLow, bool enableHigh);
@@ -58,8 +62,20 @@ private:
     uint     _offsetW{0};
 
     // Registro di stato ATA (Task File Registers)
-    uint8_t  _statusRegister{0x00};
-    uint8_t  _errorRegister{0x00};
+    std::array<uint8_t, 16> _registers{0};
+
+
+    // Struttura per il tracciamento asincrono
+    struct TraceEvent {
+        uint8_t address;
+        bool isWrite;
+        uint8_t data;
+    };
+    
+    static constexpr size_t TRACE_BUFFER_SIZE = 256;
+    TraceEvent _traceBuffer[TRACE_BUFFER_SIZE];
+    volatile size_t _traceHead{0};
+    size_t _traceTail{0};    
 
     static IDEController* s_instance;
 };

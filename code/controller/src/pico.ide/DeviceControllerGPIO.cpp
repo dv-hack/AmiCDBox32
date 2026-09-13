@@ -11,8 +11,6 @@
 
 #include <iostream>
 
-extern uint32_t g_ideInteractions;
-
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerGPIO::init()
 {
@@ -71,13 +69,4 @@ void DeviceControllerGPIO::update()
     }
 
     _ideController.update();
-
-    // 3. Debug sicuro: stampa a terminale solo se il PIO ha rilevato qualcosa
-    static uint32_t lastInteractions = 0;
-    if (g_ideInteractions != lastInteractions)
-    {
-        std::cout << "[IDE] Bus Activity! PIO detected " 
-                  << (g_ideInteractions - lastInteractions) << " new transactions.\n";
-        lastInteractions = g_ideInteractions;
-    }    
 }
