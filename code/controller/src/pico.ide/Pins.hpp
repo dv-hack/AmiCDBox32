@@ -5,40 +5,38 @@
 enum Pin
 {
     // --- BUS DATI & TRANSCEIVER 74LVC245 (Pico Pins 1-15) ---
-    GP00 = 0, // IDE.DB0 (Lato A0 condiviso dai due 74LVC245)
-    GP01,     // IDE.DB1 (Lato A1 condiviso dai due 74LVC245)
-    GP02,     // IDE.DB2 (Lato A2 condiviso dai due 74LVC245)
-    GP03,     // IDE.DB3 (Lato A3 condiviso dai two 74LVC245)
-    GP04,     // IDE.DB4 (Lato A4 condiviso dai due 74LVC245)
-    GP05,     // IDE.DB5 (Lato A5 condiviso dai due 74LVC245)
-    GP06,     // IDE.DB6 (Lato A6 condiviso dai due 74LVC245)
-    GP07,     // IDE.DB7 (Lato A7 condiviso dai due 74LVC245)
+    GP00 = 0, // IDE.DB0 - IDE.DB8  (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP01,     // IDE.DB1 - IDE.DB9  (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP02,     // IDE.DB2 - IDE.DB10 (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP03,     // IDE.DB3 - IDE.DB11 (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP04,     // IDE.DB4 - IDE.DB12 (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP05,     // IDE.DB5 - IDE.DB13 (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP06,     // IDE.DB6 - IDE.DB14 (condiviso da U1(74LVC245) e U2 (74LVC573))
+    GP07,     // IDE.DB7 - IDE.DB15 (condiviso da U1(74LVC245) e U2 (74LVC573))
 
-    GP08, // Transceiver 1 OE_LOW# (Abilita Byte Basso D0-D7)
-    GP09, // Transceiver 2 OE_HIGH# (Abilita Byte Alto D8-D15)
-    GP10, // Transceiver DIR (Direzione: 0 = Lettura Amiga->Pico, 1 = Scrittura Pico->Amiga)
+    GP08, // U1 Byte basso DIR (Low = Lettura Amiga->Pico, High = Scrittura Pico->Amiga)
+    GP09, // U1 Byte basso OE# (Controllo U1 - HIGH = Disabilitato, LOW = Abilitato)
+    GP10, // U2 Byte alto OE# (Controllo U2 - HIGH = Disabilitato, LOW = Abilitato)
 
-    // --- BUS CONTROLLO IDE via YF08E / TXS0108E (Pico Pins 15-24) ---
-    GP11, // IDE.CS0# (via YF08E Ch 1)
-    GP12, // IDE.CS1# (via YF08E Ch 2)
-    GP13, // IDE.A0 (via YF08E Ch 3)
-    GP14, // IDE.A1 (via YF08E Ch 4)
-    GP15, // IDE.A2 (via YF08E Ch 5)
-    GP16, // IDE.DIOR# (via YF08E Ch 6)
-    GP17, // IDE.DIOW# (via YF08E Ch 7)
-    GP18, // Physical Button Control -----IDE.RESET#(via YF08E Ch 8)
+    GP11, // U3 LE (Impulso HIGH = blocca il byte alto nel latch)
+    GP12, // U3 OE# (Controllo U3 LOW = Spinge il byte alto dal latch al bus IDE)
 
-    // --- AUDIO I2S PCM5102A (Pico Pins 25-27) ---
-    GP19, // PCMAudio.BCK (Bit Clock)
-    GP20, // PCMAudio.LCK (L/R Word Select)
-    GP21, // PCMAudio.DIN (Data In)
+    GP13, // U4 -> IDE.DIOR# (Segnale di lettura IDE via 74LVC245)
+    GP14, // U4 -> IDE.DIOW# (Segnale di scrittura IDE via 74LVC245)
+    GP15, // U4 -> IDE.CS0# (Chip Select 0 via transceiver 74LVC245 lato Pico)
+    GP16, // U4 -> IDE.CS1# (Chip Select 1 via transceiver 74LVC245 lato Pico)
+    GP17, // U4 -> IDE.A0 (Indirizzo A0 via transceiver 74LVC245 lato Pico)
+    GP18, // U4 -> IDE.A1 (Indirizzo A1 via transceiver 74LVC245 lato Pico)
+    GP19, // U4 -> IDE.A2 (Indirizzo A2 via transceiver 74LVC245 lato Pico)
+    GP20, // U4 -> IDE.RESET# (Segnale di reset IDE via 74LVC245)
 
-    // --- LETTORE SD CARD & INTERFACCIA (Pico Pins 29-34) ---
-    GP22, // SDCardReader.cs
+    GP21, // Pico -> IDE.IORDY (Ready/Busy del device verso l'host)
+
+    GP22, // SDCardReader.CS
     GP23, // -- NC (Power control Wi-Fi su Pico W)
     GP24, // -- NC (VBUS sense su Pico W)
     GP25, // -- NC (LED integrato su Pico standard)
-    GP26, // SDCardReader.clk/sck
-    GP27, // SDCardReader.mosi
-    GP28, // SDCardReader.miso
+    GP26, // SDCardReader.SCK
+    GP27, // SDCardReader.MOSI
+    GP28, // SDCardReader.MISO
 };

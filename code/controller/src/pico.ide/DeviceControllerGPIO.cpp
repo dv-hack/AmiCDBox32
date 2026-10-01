@@ -37,6 +37,7 @@ void DeviceControllerGPIO::init()
 // ------------------------------------------------------------------------------------------------
 void DeviceControllerGPIO::update()
 {
+#if 0
     const auto btnEvent = _buttonControl.update();
     
     switch (btnEvent)
@@ -67,6 +68,6 @@ void DeviceControllerGPIO::update()
         default:
             break;
     }
-
+#endif
     _ideController.update();
 }

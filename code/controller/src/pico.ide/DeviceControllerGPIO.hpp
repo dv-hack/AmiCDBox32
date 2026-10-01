@@ -28,5 +28,5 @@ private:
 
     DiscPlaylist _playlist;
     
-    PhysicalButton _buttonControl{Pin::GP18};
+    //PhysicalButton _buttonControl{Pin::GP18};
 };

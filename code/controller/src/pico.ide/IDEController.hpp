@@ -9,25 +9,15 @@
 #include <cstdint>
 #include <array>
 
-class DeviceControllerGPIO;
-
 class IDEController
 {
 public:
-    // enum class BusOperation
-    // {
-    //     None,
-    //     RegisterRead,
-    //     RegisterWrite,
-    //     DataBlockRead,
-    //     DataBlockWrite
-    // };
-
     struct IDETransaction
     {
-        uint8_t  address;   // Indirizzo registro (A0..A2 + CS0/CS1)
-        bool     isWrite;   // true = DIOW#, false = DIOR#
-        uint16_t data;      // Dato a 16 bit letto/da scrivere
+        uint8_t  address;   
+        bool     isWrite;   
+        uint16_t data;      
+        uint32_t rawSample;
     };
 
 public:
@@ -36,40 +26,52 @@ public:
 
     void init(PIO pioInstance = pio0);
     void update();
-
     void printTrace();
 
-    // Gestione direzione transceiver 74LVC245
-    void setTransceiverDirection(bool driveToAmiga);
-    void enableTransceivers(bool enableLow, bool enableHigh);
-
 private:
-    static constexpr uint32_t DATA_BUS_MASK = 0x000000FF; // GP00..GP07 (Bit 0..7)
-
-    // Gestione diretta dei GPIO dati e dei transceiver
-    void setBusDataDirection(bool driveToHost);
-    void writeDataByte(uint8_t byte);
-    
-    uint8_t readDataByte();
     static void pioInterruptHandler();
+    
     void processTransaction(const IDETransaction& tx);
+
+    void handleCommand(uint8_t command);
+    void handleSCSIPacket();
+    void resetDevice();
+    //void setIORDY(bool ready);
+
+    uint16_t readRegister16(uint8_t address);
+    void     writeRegister16(uint8_t address, uint16_t value);
+    void     prepareIdentifyPacket();
 
 private:
     PIO      _pio{pio0};
-    uint     _smR{0};          // State Machine per la Lettura (DIOR)
-    uint     _smW{0};          // State Machine per la Scrittura (DIOW)
+    uint     _smR{0};          
+    uint     _smW{0};          
     uint     _offsetR{0};
     uint     _offsetW{0};
 
-    // Registro di stato ATA (Task File Registers)
-    std::array<uint8_t, 16> _registers{0};
+    std::array<uint8_t, 8> _taskFile{};
+    uint8_t _deviceControl = 0;
+    uint8_t _status = 0x50;
+    uint8_t _error = 0;
 
+    std::array<uint8_t, 12> _packet{};
+    uint8_t _packetIndex = 0;
+    uint8_t _packetExpected = 0;
 
-    // Struttura per il tracciamento asincrono
+    std::array<uint8_t, 2048> _dataBuffer{};
+    uint32_t _dataLength = 0;
+    uint32_t _dataIndex = 0;
+
+    bool _packetPhase = false;
+    bool _dataInPhase = false;
+    bool _dataOutPhase = false;
+
     struct TraceEvent {
         uint8_t address;
         bool isWrite;
-        uint8_t data;
+        uint16_t data;
+        uint32_t rawSample;
+        uint32_t gpioSnapshot;        
     };
     
     static constexpr size_t TRACE_BUFFER_SIZE = 256;

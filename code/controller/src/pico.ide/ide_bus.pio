@@ -1,19 +1,55 @@
 .program ide_strobe_dior
 .wrap_target
-    wait 0 gpio 16      ; Attende che DIOR# vada basso
-    nop [3]             ; Ritardo di ~32ns a 125MHz per assestamento linee A0-A2
-    in pins, 7          ; Campiona i pin
-    push block
-    irq 0
-    wait 1 gpio 16
+    wait 0 gpio 13       ; 1. Attende che DIOR# scenda
+    
+    ; Controlla CS1# (GP16). Se GP16 è alto (CS1 non attivo -> è CS0), salta a do_cs0.
+    ; Se GP16 è basso (CS1 attivo, es. registro 0xE), prosegue SENZA toccare IORDY!
+    jmp pin, do_cs0      
+    
+    ; --- Percorso CS1 (Alternate Status / Control): Zero-wait, niente IORDY ---
+    set pindirs, 0
+    in pins, 5          
+    push block           
+    pull block           
+    wait 1 gpio 13       
+    jmp wrap_end
+    
+do_cs0:
+    ; --- Percorso CS0 (Registri standard e Data): Con IORDY ---
+    set pins, 0          
+    set pindirs, 1       ; Attiva IORDY (ferma l'host solo dove serve)
+    in pins, 5          
+    push block           
+    pull block           
+    set pindirs, 0       ; Rilascia IORDY
+    
+wrap_end:
+    wait 1 gpio 13       ; Attende che DIOR# risalga fisicamente
 .wrap
 
 .program ide_strobe_diow
 .wrap_target
-    wait 0 gpio 17      ; Attende che DIOW# vada basso
-    nop [3]             ; Ritardo di ~32ns
-    in pins, 7
-    push block
-    irq 0
-    wait 1 gpio 17
+    wait 0 gpio 14       ; 1. Attende che DIOW# scenda
+    
+    jmp pin, do_cs0_w    
+    
+    ; --- Percorso CS1 in Scrittura ---
+    set pindirs, 0
+    in pins, 5          
+    push block           
+    pull block           
+    wait 1 gpio 14       
+    jmp wrap_end_w
+    
+do_cs0_w:
+    ; --- Percorso CS0 in Scrittura ---
+    set pins, 0          
+    set pindirs, 1       
+    in pins, 5          
+    push block           
+    pull block           
+    set pindirs, 0       
+    
+wrap_end_w:
+    wait 1 gpio 14       
 .wrap
